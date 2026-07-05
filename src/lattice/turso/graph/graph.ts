@@ -4,19 +4,20 @@ import {
   bindGetConfidence,
   bindGetTransitionWeight,
   bindInsertEdge,
-  bindInsertNode,
-  bindSelectNodeId,
   bindSelectTopTokens,
   bindSelectTransitions,
+  bindUpsertNode,
   createGraphStatements,
   createGraphTables,
   type GraphStatements,
+  type UpsertNodeRow,
 } from "./graph.db";
 import { DegreeScorer, type ITursoHubScorer } from "./scorers";
 
 export class Graph {
   private db: TursoDatabase;
   private scorer: ITursoHubScorer;
+  private nodeIdCache = new Map<string, number>();
   private statements!: GraphStatements;
 
   private constructor(database: TursoDatabase, scorer: ITursoHubScorer) {
@@ -35,10 +36,15 @@ export class Graph {
   }
 
   async getOrCreateNode(pattern: string): Promise<number> {
+    const cached = this.nodeIdCache.get(pattern);
+    if (cached !== undefined) return cached;
+
     const insert: GraphNodeInsert = { pattern };
-    await this.statements.insertNode.run(...bindInsertNode(insert));
-    const row = await this.statements.selectNodeId.get(...bindSelectNodeId({ pattern }));
+    const row = (await this.statements.upsertNode.get(...bindUpsertNode(insert))) as
+      | UpsertNodeRow
+      | undefined;
     if (!row) throw new Error(`Failed to get/create node for pattern: ${pattern}`);
+    this.nodeIdCache.set(pattern, row.id as number);
     return row.id as number;
   }
 

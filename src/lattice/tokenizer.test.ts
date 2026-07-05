@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ILattice } from "./lattice";
+import type { IAsyncLattice, ILattice } from "./lattice";
 import { Lattice as MemoryLattice } from "./memory/lattice";
 import { Lattice as SqliteLattice } from "./sqlite/lattice";
 import { beamDecode, createViterbiContext, decode, viterbiDecode } from "./tokenize";
@@ -7,10 +7,29 @@ import { createAsyncLatticeTokenizer, createLatticeTokenizer } from "./tokenizer
 import { Lattice as TursoLattice } from "./turso/lattice";
 
 function trainSplitHello(lattice: ILattice) {
+  lattice.ingestBatch([
+    { key: "he", sequence: ["h", "e"] },
+    { key: "llo", sequence: ["l", "l", "o"] },
+    { key: "hello", sequence: ["h", "e", "l", "l", "o"] },
+    { key: "x", sequence: ["x"] },
+  ]);
   for (let i = 0; i < 20; i++) {
     lattice.merge([["he", "llo"]]);
   }
   lattice.merge([["hello", "x"]]);
+}
+
+async function trainSplitHelloAsync(lattice: IAsyncLattice) {
+  await lattice.ingestBatch([
+    { key: "he", sequence: ["h", "e"] },
+    { key: "llo", sequence: ["l", "l", "o"] },
+    { key: "hello", sequence: ["h", "e", "l", "l", "o"] },
+    { key: "x", sequence: ["x"] },
+  ]);
+  for (let i = 0; i < 20; i++) {
+    await lattice.merge([["he", "llo"]]);
+  }
+  await lattice.merge([["hello", "x"]]);
 }
 
 describe("viterbiDecode", () => {
@@ -154,6 +173,7 @@ describe("memory lattice tokenize", () => {
   test("ingest registers full pattern for candidate matching", () => {
     const lattice = new MemoryLattice();
     lattice.ingest({ key: "ab", sequence: ["a", "b"] });
+    lattice.ingest({ key: "cd", sequence: ["c", "d"] });
     lattice.merge([["ab", "cd"]]);
     expect(lattice.tokenize("abcd")).toEqual(["ab", "cd"]);
     lattice.close();
@@ -212,10 +232,7 @@ describe("backend tokenize parity", () => {
 
   test("turso lattice tokenize", async () => {
     const lattice = await TursoLattice.open(":memory:");
-    for (let i = 0; i < 20; i++) {
-      await lattice.merge([["he", "llo"]]);
-    }
-    await lattice.merge([["hello", "x"]]);
+    await trainSplitHelloAsync(lattice);
     expect(await lattice.tokenize("hello")).toEqual(["he", "llo"]);
     await lattice.close();
   });
@@ -244,8 +261,7 @@ describe("backend tokenize parity", () => {
     sqlite.close();
 
     const turso = await TursoLattice.open(":memory:");
-    for (let i = 0; i < 20; i++) await turso.merge([["he", "llo"]]);
-    await turso.merge([["hello", "x"]]);
+    await trainSplitHelloAsync(turso);
     expect(await turso.tokenize("hello", beamOpts)).toEqual(["he", "llo"]);
     await turso.close();
   });

@@ -10,6 +10,7 @@ import { Trie } from "./trie";
 export interface SqliteLatticeConfig {
   filename?: string;
   scorer?: ISqliteHubScorer;
+  bulkIngest?: boolean;
 }
 
 /**
@@ -19,12 +20,17 @@ export class Lattice implements ILattice {
   private db: Database;
   private trie: Trie;
   private graph: Graph;
+  private bulkIngest: boolean;
   private writesSinceCheckpoint = 0;
 
   constructor(config: SqliteLatticeConfig | string = {}) {
-    const { filename = ":memory:", scorer = new DegreeScorer() } =
-      typeof config === "string" ? { filename: config } : config;
+    const {
+      filename = ":memory:",
+      scorer = new DegreeScorer(),
+      bulkIngest = false,
+    } = typeof config === "string" ? { filename: config } : config;
 
+    this.bulkIngest = bulkIngest;
     this.db = new Database(filename, { create: true });
     this.db.run("PRAGMA journal_mode = WAL;");
     this.db.run("PRAGMA synchronous = OFF;");
@@ -36,11 +42,12 @@ export class Lattice implements ILattice {
   }
 
   merge(pairs: [string, string, number?][]): void {
+    for (const [from, to] of pairs) {
+      if (from.length === 0 || to.length === 0) throw new Error("Cannot merge empty pattern");
+    }
     const tx = this.db.transaction(() => {
       for (const [from, to, delta] of pairs) {
-        const { from_id, to_id } = this.graph.merge(from, to, delta);
-        this.trie.merge(from, from_id);
-        this.trie.merge(to, to_id);
+        this.graph.merge(from, to, delta);
       }
     });
     tx();
@@ -52,6 +59,8 @@ export class Lattice implements ILattice {
   }
 
   ingestBatch(segments: LatticeSegment[]): void {
+    if (segments.length === 0) return;
+
     const tx = this.db.transaction(() => {
       for (const segment of segments) {
         const markovId = this.graph.getOrCreateNode(segment.key);
@@ -59,6 +68,25 @@ export class Lattice implements ILattice {
           this.trie.merge(element, markovId);
         }
         this.trie.merge(segment.key, markovId);
+      }
+    });
+    tx();
+    this.maybeCheckpoint();
+  }
+
+  commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void {
+    if (segments.length === 0 && pairs.length === 0) return;
+
+    const tx = this.db.transaction(() => {
+      for (const segment of segments) {
+        const markovId = this.graph.getOrCreateNode(segment.key);
+        for (const element of segment.sequence) {
+          this.trie.merge(element, markovId);
+        }
+        this.trie.merge(segment.key, markovId);
+      }
+      for (const [from, to, delta] of pairs) {
+        this.graph.merge(from, to, delta);
       }
     });
     tx();
@@ -123,6 +151,7 @@ export class Lattice implements ILattice {
   }
 
   private maybeCheckpoint(): void {
+    if (this.bulkIngest) return;
     this.writesSinceCheckpoint++;
     if (this.writesSinceCheckpoint >= WAL_CHECKPOINT_INTERVAL) {
       this.db.run("PRAGMA wal_checkpoint(TRUNCATE);");

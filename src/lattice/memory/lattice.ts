@@ -25,9 +25,8 @@ export class Lattice implements ILattice {
 
   merge(pairs: [string, string, number?][]): void {
     for (const [from, to, delta] of pairs) {
-      const { from_id, to_id } = this.graph.merge(from, to, delta);
-      this.trie.merge(from, from_id);
-      this.trie.merge(to, to_id);
+      if (from.length === 0 || to.length === 0) throw new Error("Cannot merge empty pattern");
+      this.graph.merge(from, to, delta);
     }
   }
 
@@ -43,6 +42,11 @@ export class Lattice implements ILattice {
       }
       this.trie.merge(segment.key, markovId);
     }
+  }
+
+  commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void {
+    this.ingestBatch(segments);
+    this.merge(pairs);
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {

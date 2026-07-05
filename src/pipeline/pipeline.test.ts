@@ -3,6 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Lattice } from "../lattice/memory/lattice";
+import { Lattice as SqliteLattice } from "../lattice/sqlite/lattice";
 import { Lattice as TursoLattice } from "../lattice/turso/lattice";
 import { Unbounded } from "../lz-sequencer/dictionary/unbounded";
 import { LZGate } from "../lz-sequencer/lz-gate";
@@ -85,5 +86,39 @@ describe("AsyncPipeline", () => {
 
     expect((await lattice.vocabulary()).length).toBeGreaterThan(0);
     await lattice.close();
+  });
+
+  test("sqlite and turso ingest parity", async () => {
+    const input = "hello hello world ";
+    const dictionarySqlite = new Unbounded();
+    const dictionaryTurso = new Unbounded();
+
+    const sqlite = new SqliteLattice(":memory:");
+    const sqliteSequencer = new Sequencer({
+      gates: [new LZGate({ cache: dictionarySqlite })],
+      queue: new Queue({ historyOptions: { bounded: false } }),
+    });
+    await new Pipeline({
+      lattice: sqlite,
+      sequencer: sqliteSequencer,
+      dictionary: dictionarySqlite,
+    }).run(new ArrayJob(input));
+
+    const turso = await TursoLattice.open(":memory:");
+    const tursoSequencer = new Sequencer({
+      gates: [new LZGate({ cache: dictionaryTurso })],
+      queue: new Queue({ historyOptions: { bounded: false } }),
+    });
+    await new AsyncPipeline({
+      lattice: turso,
+      sequencer: tursoSequencer,
+      dictionary: dictionaryTurso,
+    }).run(new ArrayJob(input));
+
+    expect(sqliteSequencer.history.length).toBe(tursoSequencer.history.length);
+    expect(sqlite.vocabulary().length).toBe((await turso.vocabulary()).length);
+
+    sqlite.close();
+    await turso.close();
   });
 });

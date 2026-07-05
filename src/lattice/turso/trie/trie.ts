@@ -1,15 +1,15 @@
 import type { MatchCandidate } from "../../trie";
-import type { TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
+import type { TrieNodeInsert } from "../../trie.model";
 import type { TursoDatabase } from "../db";
 import {
-  bindInsertTrieNode,
   bindSelectTrieChildren,
   bindSelectTrieNode,
-  bindUpdateTrieTerminal,
+  bindUpsertTrieNode,
   createTrieStatements,
   createTrieTable,
-  type InsertTrieNodeRow,
+  parentKey,
   type TrieStatements,
+  type UpsertTrieNodeRow,
 } from "./trie.db";
 
 export class Trie {
@@ -32,29 +32,24 @@ export class Trie {
     for (let i = 0; i < pattern.length; i++) {
       const char = pattern[i];
       if (char === undefined) throw new Error("Out of range");
+      const isTerminal = i === pattern.length - 1;
       const insert: TrieNodeInsert = {
         parent_id,
+        parent_key: parentKey(parent_id),
         char,
-        terminal: i === pattern.length - 1 ? 1 : 0,
+        terminal: isTerminal ? 1 : 0,
+        pattern: isTerminal ? pattern : null,
+        markov_id: isTerminal ? markov_id : null,
       };
 
-      const row = (await this.statements.insertTrieNode.get(...bindInsertTrieNode(insert))) as
-        | InsertTrieNodeRow
+      const row = (await this.statements.upsertTrieNode.get(...bindUpsertTrieNode(insert))) as
+        | UpsertTrieNodeRow
         | undefined;
       if (!row) throw new Error(`Failed to insert trie node for char: ${char}`);
       parent_id = row.id;
     }
 
     if (parent_id === null) throw new Error("Failed to merge pattern");
-
-    const update: TrieNodeUpdate = {
-      id: parent_id,
-      pattern,
-      markov_id,
-      terminal: 1,
-    };
-    await this.statements.updateTrieTerminal.run(...bindUpdateTrieTerminal(update));
-
     return parent_id;
   }
 
@@ -63,14 +58,14 @@ export class Trie {
 
     for (const char of prefix) {
       const row = (await this.statements.selectTrieNode.get(
-        ...bindSelectTrieNode({ parent_id, char }),
-      )) as InsertTrieNodeRow | undefined;
+        ...bindSelectTrieNode({ parent_key: parentKey(parent_id), char }),
+      )) as UpsertTrieNodeRow | undefined;
       if (!row) return [];
       parent_id = row.id;
     }
 
     const rows = await this.statements.selectTrieChildren.all(
-      ...bindSelectTrieChildren({ parent_id }),
+      ...bindSelectTrieChildren({ parent_key: parentKey(parent_id) }),
     );
     return rows.map((r) => r.char as string);
   }
@@ -85,7 +80,7 @@ export class Trie {
       if (char === undefined) break;
 
       const row = (await this.statements.selectTrieNode.get(
-        ...bindSelectTrieNode({ parent_id, char }),
+        ...bindSelectTrieNode({ parent_key: parentKey(parent_id), char }),
       )) as { id: number; terminal: number; pattern: string | null } | undefined;
       if (!row) break;
 

@@ -4,19 +4,17 @@ import { bind } from "../bind";
 import {
   createTrieStatements,
   createTrieTable,
-  type InsertTrieNodeStmt,
+  parentKey,
   type SelectTrieChildrenStmt,
   type SelectTrieNodeStmt,
-  type UpdateTrieTerminalStmt,
+  type UpsertTrieNodeStmt,
 } from "./trie.db";
 
 export class Trie implements ITrie {
   private db: Database;
 
-  // Prepared statements
-  private insertTrieNode!: InsertTrieNodeStmt;
+  private upsertTrieNode!: UpsertTrieNodeStmt;
   private selectTrieNode!: SelectTrieNodeStmt;
-  private updateTrieTerminal!: UpdateTrieTerminalStmt;
   private selectTrieChildren!: SelectTrieChildrenStmt;
 
   constructor(database: Database) {
@@ -30,22 +28,13 @@ export class Trie implements ITrie {
   }
 
   private prepareStatements() {
-    const { insertTrieNode, selectTrieNode, updateTrieTerminal, selectTrieChildren } =
-      createTrieStatements(this.db);
+    const { upsertTrieNode, selectTrieNode, selectTrieChildren } = createTrieStatements(this.db);
 
-    this.insertTrieNode = insertTrieNode;
+    this.upsertTrieNode = upsertTrieNode;
     this.selectTrieNode = selectTrieNode;
-    this.updateTrieTerminal = updateTrieTerminal;
     this.selectTrieChildren = selectTrieChildren;
   }
 
-  /**
-   * Inserts a token into the trie, creating nodes character by character.
-   * Returns the markov_id column value for the terminal node.
-   * @param token - The token to insert
-   * @param markov_id - The markov node id to associate with this token
-   * @returns The terminal node's trie id
-   */
   merge(pattern: string, markov_id: number): number {
     if (pattern.length === 0) throw new Error("Cannot merge empty pattern");
 
@@ -57,43 +46,38 @@ export class Trie implements ITrie {
         (() => {
           throw new Error("out of range");
         })();
-      const terminal = i === pattern.length - 1 ? 1 : 0;
+      const isTerminal = i === pattern.length - 1;
 
-      const row = this.insertTrieNode.get(bind({ parent_id, char, terminal }));
+      const row = this.upsertTrieNode.get(
+        bind({
+          parent_id,
+          parent_key: parentKey(parent_id),
+          char,
+          terminal: isTerminal ? 1 : 0,
+          pattern: isTerminal ? pattern : null,
+          markov_id: isTerminal ? markov_id : null,
+        }),
+      );
       if (!row) throw new Error(`Failed to insert trie node for char: ${char}`);
       parent_id = row.id;
     }
 
     if (parent_id === null) throw new Error("Failed to merge pattern");
-
-    // Update terminal node with pattern and markov_id
-    this.updateTrieTerminal.run(
-      bind({
-        id: parent_id,
-        pattern,
-        markov_id,
-        terminal: 1,
-      }),
-    );
-
     return parent_id;
   }
 
-  /**
-   * Gets immediate child characters of a prefix in the trie.
-   * @param prefix - The prefix to search for
-   * @returns Array of child characters
-   */
   nextCharacters(prefix: string): string[] {
     let parent_id: number | null = null;
 
     for (const char of prefix) {
-      const row = this.selectTrieNode.get(bind({ parent_id, char }));
+      const row = this.selectTrieNode.get(bind({ parent_key: parentKey(parent_id), char }));
       if (!row) return [];
       parent_id = row.id;
     }
 
-    return this.selectTrieChildren.all(bind({ parent_id })).map((r) => r.char);
+    return this.selectTrieChildren
+      .all(bind({ parent_key: parentKey(parent_id) }))
+      .map((r) => r.char);
   }
 
   matchCandidates(text: string, offset = 0): MatchCandidate[] {
@@ -105,7 +89,7 @@ export class Trie implements ITrie {
       const char = text[i];
       if (char === undefined) break;
 
-      const row = this.selectTrieNode.get(bind({ parent_id, char }));
+      const row = this.selectTrieNode.get(bind({ parent_key: parentKey(parent_id), char }));
       if (!row) break;
 
       parent_id = row.id;

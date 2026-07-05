@@ -2,6 +2,7 @@ import { expect } from "bun:test";
 
 export interface LatticeLike {
   merge(pairs: [string, string][]): void | Promise<void>;
+  ingestBatch?(segments: { key: string; sequence: string[] }[]): void | Promise<void>;
   getNext(
     from: string,
   ): { to: string; weight: number }[] | Promise<{ to: string; weight: number }[]>;
@@ -14,6 +15,12 @@ export interface LatticeLike {
 
 export async function expectLatticeBasics(create: () => LatticeLike | Promise<LatticeLike>) {
   const lattice = await create();
+
+  const patterns = ["hello", "world", "wide"];
+  const segments = patterns.map((pattern) => ({ key: pattern, sequence: [...pattern] }));
+  if (lattice.ingestBatch) {
+    await lattice.ingestBatch(segments);
+  }
 
   await lattice.merge([
     ["hello", "world"],

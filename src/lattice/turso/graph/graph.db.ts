@@ -20,17 +20,15 @@ export const createGraphTables = async (database: TursoDatabase) => {
 
 export type GraphStatements = Awaited<ReturnType<typeof createGraphStatements>>;
 
-export type SelectNodeIdArgs = Pick<GraphNode, "pattern">;
 export type SelectTopTokensArgs = { limit: number };
 
 export const createGraphStatements = async (database: TursoDatabase) => {
-  const insertNode = await database.prepare(`
+  const upsertNode = await database.prepare(`
     INSERT INTO nodes (token)
     VALUES (?)
-    ON CONFLICT(token) DO NOTHING;
+    ON CONFLICT(token) DO UPDATE SET token = token
+    RETURNING id;
   `);
-
-  const selectNodeId = await database.prepare(`SELECT id FROM nodes WHERE token = ?;`);
 
   const insertEdge = await database.prepare(`
     INSERT INTO edges (from_id, to_id, weight)
@@ -70,8 +68,7 @@ export const createGraphStatements = async (database: TursoDatabase) => {
   `);
 
   return {
-    insertNode,
-    selectNodeId,
+    upsertNode,
     insertEdge,
     selectTransitions,
     selectTopTokens,
@@ -83,7 +80,7 @@ export const createGraphStatements = async (database: TursoDatabase) => {
 
 export type { GraphEdgeInsert, GraphNodeInsert };
 
-export function bindInsertNode(row: GraphNodeInsert): [GraphNodeInsert["pattern"]] {
+export function bindUpsertNode(row: GraphNodeInsert): [GraphNodeInsert["pattern"]] {
   return [row.pattern];
 }
 
@@ -91,10 +88,6 @@ export function bindInsertEdge(
   row: GraphEdgeInsert,
 ): [GraphEdgeInsert["from_id"], GraphEdgeInsert["to_id"], number] {
   return [row.from_id, row.to_id, row.weight ?? 1];
-}
-
-export function bindSelectNodeId(args: SelectNodeIdArgs): [SelectNodeIdArgs["pattern"]] {
-  return [args.pattern];
 }
 
 export function bindSelectTransitions(from: string): [string] {
@@ -112,3 +105,5 @@ export function bindGetTransitionWeight(from: string, to: string): [string, stri
 export function bindGetConfidence(pattern: string): [string] {
   return [pattern];
 }
+
+export type UpsertNodeRow = Pick<GraphNode, "id">;

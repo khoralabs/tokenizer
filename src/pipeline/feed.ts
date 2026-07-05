@@ -1,25 +1,27 @@
 import type { IAsyncLattice, ILattice } from "../lattice/lattice";
 import type { LatticeSegment } from "../lattice/segment";
-import type { ISequencer, SequencerInput } from "../sequencer";
+import type { ISequencer, SequencerInput, SequencerOutput } from "../sequencer";
 
 export type WeightedPair = [string, string, number?];
 
 export type FeedState = {
-  lastIngestedIndex: number;
   previousKey: string | null;
   transitionCounts: Map<string, { from: string; to: string; count: number }>;
+  pendingSegments: LatticeSegment[];
 };
+
+export const INGEST_BATCH_SIZE = 500;
 
 export function createFeedState(): FeedState {
   return {
-    lastIngestedIndex: 0,
     previousKey: null,
     transitionCounts: new Map(),
+    pendingSegments: [],
   };
 }
 
-function toSegment(output: { key: string; sequence: readonly string[] }): LatticeSegment {
-  return { key: output.key, sequence: [...output.sequence] };
+function toSegment(output: SequencerOutput): LatticeSegment {
+  return { key: output.key, sequence: output.sequence as string[] };
 }
 
 function transitionKey(from: string, to: string): string {
@@ -43,120 +45,98 @@ function countsToPairs(
   return [...counts.values()].map(({ from, to, count }) => [from, to, count]);
 }
 
-function flushTransitionCounts(
-  lattice: ILattice,
-  counts: Map<string, { from: string; to: string; count: number }>,
-  batchSize: number,
-): void {
-  const pairs = countsToPairs(counts);
-  counts.clear();
-  for (let i = 0; i < pairs.length; i += batchSize) {
-    lattice.merge(pairs.slice(i, i + batchSize));
-  }
+function shouldFlush(
+  pendingCount: number,
+  transitionCount: number,
+  transitionBatchSize: number,
+): boolean {
+  return pendingCount >= INGEST_BATCH_SIZE || transitionCount >= transitionBatchSize;
 }
 
-async function flushTransitionCountsAsync(
+function flushFeedBatch(lattice: ILattice, state: FeedState, transitionBatchSize: number): void {
+  const pairs = countsToPairs(state.transitionCounts);
+  state.transitionCounts.clear();
+
+  if (pairs.length > transitionBatchSize) {
+    const segments = state.pendingSegments.splice(0);
+    for (let i = 0; i < pairs.length; i += transitionBatchSize) {
+      const pairBatch = pairs.slice(i, i + transitionBatchSize);
+      const segmentBatch = i === 0 ? segments : [];
+      lattice.commitFeedBatch(segmentBatch, pairBatch);
+    }
+    return;
+  }
+
+  lattice.commitFeedBatch(state.pendingSegments.splice(0), pairs);
+}
+
+async function flushFeedBatchAsync(
   lattice: IAsyncLattice,
-  counts: Map<string, { from: string; to: string; count: number }>,
-  batchSize: number,
+  state: FeedState,
+  transitionBatchSize: number,
 ): Promise<void> {
-  const pairs = countsToPairs(counts);
-  counts.clear();
-  for (let i = 0; i < pairs.length; i += batchSize) {
-    await lattice.merge(pairs.slice(i, i + batchSize));
+  const pairs = countsToPairs(state.transitionCounts);
+  state.transitionCounts.clear();
+
+  if (pairs.length > transitionBatchSize) {
+    const segments = state.pendingSegments.splice(0);
+    for (let i = 0; i < pairs.length; i += transitionBatchSize) {
+      const pairBatch = pairs.slice(i, i + transitionBatchSize);
+      const segmentBatch = i === 0 ? segments : [];
+      await lattice.commitFeedBatch(segmentBatch, pairBatch);
+    }
+    return;
   }
+
+  await lattice.commitFeedBatch(state.pendingSegments.splice(0), pairs);
 }
 
-async function refreshHubScores(lattice: ILattice | IAsyncLattice): Promise<void> {
-  await lattice.getTopTokens(1);
-}
-
-const INGEST_BATCH_SIZE = 100;
-
-export function ingestNewSegments(
+function processOutputs(
   lattice: ILattice,
-  history: { key: string; sequence: readonly string[] }[],
-  startIndex: number,
-  previousKey: string | null,
-  counts: Map<string, { from: string; to: string; count: number }>,
-  batchSize: number,
-): string | null {
-  let prev = previousKey;
-  const pending: LatticeSegment[] = [];
-
-  const flushPending = (): void => {
-    if (pending.length === 0) return;
-    lattice.ingestBatch(pending.splice(0));
-  };
-
-  for (let i = startIndex; i < history.length; i++) {
-    const output = history[i];
-    if (!output) continue;
-
+  outputs: SequencerOutput[],
+  state: FeedState,
+  transitionBatchSize: number,
+): void {
+  for (const output of outputs) {
     const segment = toSegment(output);
-    pending.push(segment);
-    if (pending.length >= INGEST_BATCH_SIZE) flushPending();
+    state.pendingSegments.push(segment);
 
-    if (prev !== null) {
-      recordTransition(counts, prev, segment.key);
-      if (counts.size >= batchSize) {
-        flushPending();
-        flushTransitionCounts(lattice, counts, batchSize);
-      }
+    if (state.previousKey !== null) {
+      recordTransition(state.transitionCounts, state.previousKey, segment.key);
     }
 
-    prev = segment.key;
-  }
+    state.previousKey = segment.key;
 
-  flushPending();
-  if (counts.size > 0) {
-    flushTransitionCounts(lattice, counts, batchSize);
+    if (
+      shouldFlush(state.pendingSegments.length, state.transitionCounts.size, transitionBatchSize)
+    ) {
+      flushFeedBatch(lattice, state, transitionBatchSize);
+    }
   }
-
-  return prev;
 }
 
-export async function ingestNewSegmentsAsync(
+async function processOutputsAsync(
   lattice: IAsyncLattice,
-  history: { key: string; sequence: readonly string[] }[],
-  startIndex: number,
-  previousKey: string | null,
-  counts: Map<string, { from: string; to: string; count: number }>,
-  batchSize: number,
-): Promise<string | null> {
-  let prev = previousKey;
-  const pending: LatticeSegment[] = [];
-
-  const flushPending = async (): Promise<void> => {
-    if (pending.length === 0) return;
-    await lattice.ingestBatch(pending.splice(0));
-  };
-
-  for (let i = startIndex; i < history.length; i++) {
-    const output = history[i];
-    if (!output) continue;
-
+  outputs: SequencerOutput[],
+  state: FeedState,
+  transitionBatchSize: number,
+): Promise<void> {
+  for (const output of outputs) {
     const segment = toSegment(output);
-    pending.push(segment);
-    if (pending.length >= INGEST_BATCH_SIZE) await flushPending();
+    state.pendingSegments.push(segment);
 
-    if (prev !== null) {
-      recordTransition(counts, prev, segment.key);
-      if (counts.size >= batchSize) {
-        await flushPending();
-        await flushTransitionCountsAsync(lattice, counts, batchSize);
-      }
+    if (state.previousKey !== null) {
+      recordTransition(state.transitionCounts, state.previousKey, segment.key);
     }
 
-    prev = segment.key;
-  }
+    state.previousKey = segment.key;
 
-  await flushPending();
-  if (counts.size > 0) {
-    await flushTransitionCountsAsync(lattice, counts, batchSize);
+    if (
+      shouldFlush(state.pendingSegments.length, state.transitionCounts.size, transitionBatchSize)
+    ) {
+      await flushFeedBatchAsync(lattice, state, transitionBatchSize);
+    }
   }
-
-  return prev;
 }
 
 export async function feedInputStream(
@@ -168,20 +148,11 @@ export async function feedInputStream(
 ): Promise<void> {
   for await (const input of source) {
     sequencer.push(input);
+    processOutputs(lattice, sequencer.drainPending(), state, batchSize);
   }
   await sequencer.flush();
-  sequencer.drainPending();
-
-  state.previousKey = ingestNewSegments(
-    lattice,
-    sequencer.history,
-    state.lastIngestedIndex,
-    state.previousKey,
-    state.transitionCounts,
-    batchSize,
-  );
-  state.lastIngestedIndex = sequencer.history.length;
-  await refreshHubScores(lattice);
+  processOutputs(lattice, sequencer.drainPending(), state, batchSize);
+  flushFeedBatch(lattice, state, batchSize);
 }
 
 export async function feedInputStreamAsync(
@@ -193,18 +164,9 @@ export async function feedInputStreamAsync(
 ): Promise<void> {
   for await (const input of source) {
     sequencer.push(input);
+    await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
   }
   await sequencer.flush();
-  sequencer.drainPending();
-
-  state.previousKey = await ingestNewSegmentsAsync(
-    lattice,
-    sequencer.history,
-    state.lastIngestedIndex,
-    state.previousKey,
-    state.transitionCounts,
-    batchSize,
-  );
-  state.lastIngestedIndex = sequencer.history.length;
-  await refreshHubScores(lattice);
+  await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
+  await flushFeedBatchAsync(lattice, state, batchSize);
 }

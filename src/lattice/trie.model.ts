@@ -9,13 +9,21 @@ const nullableString = Type.Union([Type.String(), Type.Null()]);
 export const TrieNodeSchema = Type.Object({
   id: positiveInteger,
   parent_id: nullablePositiveInteger,
+  parent_key: Type.Integer(),
   char: Type.String({ minLength: 1, maxLength: 1 }),
   pattern: nullableString,
   terminal: Type.Integer({ minimum: 0, maximum: 1 }),
   markov_id: nullablePositiveInteger,
 });
 
-export const TrieNodeInsertSchema = Type.Pick(TrieNodeSchema, ["parent_id", "char", "terminal"]);
+export const TrieNodeInsertSchema = Type.Object({
+  parent_id: nullablePositiveInteger,
+  parent_key: Type.Integer(),
+  char: Type.String({ minLength: 1, maxLength: 1 }),
+  terminal: Type.Integer({ minimum: 0, maximum: 1 }),
+  pattern: Type.Optional(nullableString),
+  markov_id: Type.Optional(nullablePositiveInteger),
+});
 
 export const TrieNodeUpdateSchema = Type.Intersect([
   Type.Pick(TrieNodeSchema, ["id", "pattern", "markov_id"]),

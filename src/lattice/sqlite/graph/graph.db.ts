@@ -3,11 +3,7 @@ import type { GraphEdgeInsert, GraphNode, GraphNodeInsert } from "../../graph.mo
 import type { BunBind } from "../bind";
 
 // Statement types
-export type InsertNodeStmt = Statement<void, [BunBind<GraphNodeInsert>]>;
-export type SelectNodeIdStmt = Statement<
-  Pick<GraphNode, "id">,
-  [BunBind<Pick<GraphNode, "pattern">>]
->;
+export type UpsertNodeStmt = Statement<Pick<GraphNode, "id">, [BunBind<GraphNodeInsert>]>;
 export type InsertEdgeStmt = Statement<void, [BunBind<GraphEdgeInsert>]>;
 export type SelectTransitionsStmt = Statement<
   { to: string; weight: number },
@@ -45,16 +41,12 @@ export const createGraphTables = (database: Database) =>
   `);
 
 export const createGraphStatements = (database: Database) => {
-  // Node and edge operations
-  const insertNode: InsertNodeStmt = database.query(`
+  const upsertNode: UpsertNodeStmt = database.query(`
     INSERT INTO nodes (token)
     VALUES ($pattern)
-    ON CONFLICT(token) DO NOTHING;
+    ON CONFLICT(token) DO UPDATE SET token = token
+    RETURNING id;
   `);
-
-  const selectNodeId: SelectNodeIdStmt = database.query(
-    `SELECT id FROM nodes WHERE token = $pattern;`,
-  );
 
   const insertEdge: InsertEdgeStmt = database.query(`
     INSERT INTO edges (from_id, to_id, weight)
@@ -98,8 +90,7 @@ export const createGraphStatements = (database: Database) => {
   `);
 
   return {
-    insertNode,
-    selectNodeId,
+    upsertNode,
     insertEdge,
     selectTransitions,
     selectNodeCount,

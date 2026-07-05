@@ -10,6 +10,7 @@ import { Trie } from "./trie";
 export interface TursoLatticeConfig {
   filename?: string;
   scorer?: ITursoHubScorer;
+  bulkIngest?: boolean;
 }
 
 /**
@@ -19,30 +20,36 @@ export class Lattice implements IAsyncLattice {
   private db: TursoDatabase;
   private trie: Trie;
   private graph: Graph;
+  private bulkIngest: boolean;
   private writesSinceCheckpoint = 0;
 
-  private constructor(db: TursoDatabase, graph: Graph, trie: Trie) {
+  private constructor(db: TursoDatabase, graph: Graph, trie: Trie, bulkIngest: boolean) {
     this.db = db;
     this.graph = graph;
     this.trie = trie;
+    this.bulkIngest = bulkIngest;
   }
 
   static async open(config: TursoLatticeConfig | string = {}): Promise<Lattice> {
-    const { filename = ":memory:", scorer = new DegreeScorer() } =
-      typeof config === "string" ? { filename: config } : config;
+    const {
+      filename = ":memory:",
+      scorer = new DegreeScorer(),
+      bulkIngest = false,
+    } = typeof config === "string" ? { filename: config } : config;
 
     const db = await connectTurso(filename);
     const graph = await Graph.open(db, scorer);
     const trie = await Trie.open(db);
-    return new Lattice(db, graph, trie);
+    return new Lattice(db, graph, trie, bulkIngest);
   }
 
   async merge(pairs: [string, string, number?][]): Promise<void> {
+    for (const [from, to] of pairs) {
+      if (from.length === 0 || to.length === 0) throw new Error("Cannot merge empty pattern");
+    }
     const tx = this.db.transaction(async () => {
       for (const [from, to, delta] of pairs) {
-        const { from_id, to_id } = await this.graph.merge(from, to, delta);
-        await this.trie.merge(from, from_id);
-        await this.trie.merge(to, to_id);
+        await this.graph.merge(from, to, delta);
       }
     });
     await tx();
@@ -69,7 +76,30 @@ export class Lattice implements IAsyncLattice {
     await this.maybeCheckpoint();
   }
 
+  async commitFeedBatch(
+    segments: LatticeSegment[],
+    pairs: [string, string, number?][],
+  ): Promise<void> {
+    if (segments.length === 0 && pairs.length === 0) return;
+
+    const tx = this.db.transaction(async () => {
+      for (const segment of segments) {
+        const markovId = await this.graph.getOrCreateNode(segment.key);
+        for (const element of segment.sequence) {
+          await this.trie.merge(element, markovId);
+        }
+        await this.trie.merge(segment.key, markovId);
+      }
+      for (const [from, to, delta] of pairs) {
+        await this.graph.merge(from, to, delta);
+      }
+    });
+    await tx();
+    await this.maybeCheckpoint();
+  }
+
   private async maybeCheckpoint(): Promise<void> {
+    if (this.bulkIngest) return;
     this.writesSinceCheckpoint++;
     if (this.writesSinceCheckpoint >= WAL_CHECKPOINT_INTERVAL) {
       await checkpointWal(this.db);

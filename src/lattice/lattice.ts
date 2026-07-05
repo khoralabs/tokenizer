@@ -43,6 +43,11 @@ export interface ILattice {
   ingestBatch(segments: LatticeSegment[]): void;
 
   /**
+   * Ingest segments and merge transitions in a single storage transaction.
+   */
+  commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void;
+
+  /**
    * Tokenize text via Viterbi decoding over graph transitions and trie candidates.
    */
   tokenize(text: string, options?: LatticeDecodeOptions): string[];
@@ -84,6 +89,7 @@ export interface IAsyncLattice {
   getTopTokens(limit?: number): Promise<{ pattern: string; confidence: number }[]>;
   ingest(segment: LatticeSegment): Promise<void>;
   ingestBatch(segments: LatticeSegment[]): Promise<void>;
+  commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): Promise<void>;
   tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]>;
   vocabulary(): Promise<string[]>;
   pipe(
