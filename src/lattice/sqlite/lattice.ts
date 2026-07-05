@@ -3,6 +3,7 @@ import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { createViterbiContext, decode } from "../tokenize";
+import { WAL_CHECKPOINT_INTERVAL } from "../wal";
 import { DegreeScorer, Graph, type ISqliteHubScorer } from "./graph";
 import { Trie } from "./trie";
 
@@ -18,6 +19,7 @@ export class Lattice implements ILattice {
   private db: Database;
   private trie: Trie;
   private graph: Graph;
+  private writesSinceCheckpoint = 0;
 
   constructor(config: SqliteLatticeConfig | string = {}) {
     const { filename = ":memory:", scorer = new DegreeScorer() } =
@@ -27,28 +29,40 @@ export class Lattice implements ILattice {
     this.db.run("PRAGMA journal_mode = WAL;");
     this.db.run("PRAGMA synchronous = OFF;");
     this.db.run("PRAGMA temp_store = MEMORY;");
+    this.db.run("PRAGMA wal_autocheckpoint = 100;");
 
     this.graph = new Graph(this.db, scorer);
     this.trie = new Trie(this.db);
   }
 
-  merge(pairs: [string, string][]): void {
+  merge(pairs: [string, string, number?][]): void {
     const tx = this.db.transaction(() => {
-      for (const [from, to] of pairs) {
-        const { from_id, to_id } = this.graph.merge(from, to);
+      for (const [from, to, delta] of pairs) {
+        const { from_id, to_id } = this.graph.merge(from, to, delta);
         this.trie.merge(from, from_id);
         this.trie.merge(to, to_id);
       }
     });
     tx();
+    this.maybeCheckpoint();
   }
 
   ingest(segment: LatticeSegment): void {
-    const markovId = this.graph.getOrCreateNode(segment.key);
-    for (const element of segment.sequence) {
-      this.trie.merge(element, markovId);
-    }
-    this.trie.merge(segment.key, markovId);
+    this.ingestBatch([segment]);
+  }
+
+  ingestBatch(segments: LatticeSegment[]): void {
+    const tx = this.db.transaction(() => {
+      for (const segment of segments) {
+        const markovId = this.graph.getOrCreateNode(segment.key);
+        for (const element of segment.sequence) {
+          this.trie.merge(element, markovId);
+        }
+        this.trie.merge(segment.key, markovId);
+      }
+    });
+    tx();
+    this.maybeCheckpoint();
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
@@ -104,6 +118,15 @@ export class Lattice implements ILattice {
   }
 
   close(): void {
+    this.db.run("PRAGMA wal_checkpoint(TRUNCATE);");
     this.db.close();
+  }
+
+  private maybeCheckpoint(): void {
+    this.writesSinceCheckpoint++;
+    if (this.writesSinceCheckpoint >= WAL_CHECKPOINT_INTERVAL) {
+      this.db.run("PRAGMA wal_checkpoint(TRUNCATE);");
+      this.writesSinceCheckpoint = 0;
+    }
   }
 }

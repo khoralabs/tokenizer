@@ -8,7 +8,7 @@ export interface IGraph {
    * @param to - Destination token
    * @returns Object containing the from and to node IDs
    */
-  merge(from: string, to: string): { from_id: number; to_id: number };
+  merge(from: string, to: string, delta?: number): { from_id: number; to_id: number };
 
   /**
    * Bulk transition insertion for large sequences.

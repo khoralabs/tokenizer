@@ -23,20 +23,26 @@ export class Lattice implements ILattice {
     this.trie = new Trie();
   }
 
-  merge(pairs: [string, string][]): void {
-    for (const [from, to] of pairs) {
-      const { from_id, to_id } = this.graph.merge(from, to);
+  merge(pairs: [string, string, number?][]): void {
+    for (const [from, to, delta] of pairs) {
+      const { from_id, to_id } = this.graph.merge(from, to, delta);
       this.trie.merge(from, from_id);
       this.trie.merge(to, to_id);
     }
   }
 
   ingest(segment: LatticeSegment): void {
-    const markovId = this.graph.getOrCreateNode(segment.key);
-    for (const element of segment.sequence) {
-      this.trie.merge(element, markovId);
+    this.ingestBatch([segment]);
+  }
+
+  ingestBatch(segments: LatticeSegment[]): void {
+    for (const segment of segments) {
+      const markovId = this.graph.getOrCreateNode(segment.key);
+      for (const element of segment.sequence) {
+        this.trie.merge(element, markovId);
+      }
+      this.trie.merge(segment.key, markovId);
     }
-    this.trie.merge(segment.key, markovId);
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {

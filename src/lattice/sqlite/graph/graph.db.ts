@@ -58,9 +58,9 @@ export const createGraphStatements = (database: Database) => {
 
   const insertEdge: InsertEdgeStmt = database.query(`
     INSERT INTO edges (from_id, to_id, weight)
-    VALUES ($from_id, $to_id, 1)
+    VALUES ($from_id, $to_id, $weight)
     ON CONFLICT(from_id, to_id)
-    DO UPDATE SET weight = weight + 1;
+    DO UPDATE SET weight = weight + excluded.weight;
   `);
 
   const selectTransitions: SelectTransitionsStmt = database.query(`

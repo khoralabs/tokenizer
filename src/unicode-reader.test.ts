@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { codepointsToString, streamUnicodeFile, toCodepoints, Unicode } from "./unicode-reader";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  codepointsToString,
+  streamUnicodeFile,
+  streamUnicodeGlob,
+  toCodepoints,
+  Unicode,
+} from "./unicode-reader";
 
 describe("unicode-reader", () => {
   test("toCodepoints and codepointsToString round-trip ascii", () => {
@@ -17,5 +26,14 @@ describe("unicode-reader", () => {
     const chars = [];
     for await (const char of streamUnicodeFile(file)) chars.push(char);
     expect(chars.join("")).toBe("caf\u0301".normalize("NFC"));
+  });
+
+  test("streamUnicodeGlob streams a direct file path", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "unicode-reader-"));
+    const path = join(dir, "direct.txt");
+    await writeFile(path, "abc");
+    const chars = [];
+    for await (const char of streamUnicodeGlob(path)) chars.push(char);
+    expect(chars.join("")).toBe("abc");
   });
 });

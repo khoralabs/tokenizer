@@ -9,3 +9,7 @@ export async function connectTurso(filename = ":memory:"): Promise<TursoDatabase
   await db.exec("PRAGMA temp_store = MEMORY;");
   return db;
 }
+
+export async function checkpointWal(db: TursoDatabase): Promise<void> {
+  await db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+}

@@ -9,7 +9,7 @@ export interface ILattice {
    * Merge sequences of tokens into the Lattice
    * @param pairs - Array of [from, to] token pairs
    */
-  merge(pairs: [string, string][]): void;
+  merge(pairs: [string, string, number?][]): void;
 
   /**
    * Retrieves all outgoing transitions for a token.
@@ -36,6 +36,11 @@ export interface ILattice {
    * Ingest a single sequencer segment into the lattice.
    */
   ingest(segment: LatticeSegment): void;
+
+  /**
+   * Ingest multiple segments in one storage transaction.
+   */
+  ingestBatch(segments: LatticeSegment[]): void;
 
   /**
    * Tokenize text via Viterbi decoding over graph transitions and trie candidates.
@@ -73,11 +78,12 @@ export interface ILattice {
  * Async lattice interface for backends such as Turso that use non-blocking I/O.
  */
 export interface IAsyncLattice {
-  merge(pairs: [string, string][]): Promise<void>;
+  merge(pairs: [string, string, number?][]): Promise<void>;
   getNext(from: string): Promise<{ to: string; weight: number }[]>;
   nextCharacters(prefix: string): Promise<string[]>;
   getTopTokens(limit?: number): Promise<{ pattern: string; confidence: number }[]>;
   ingest(segment: LatticeSegment): Promise<void>;
+  ingestBatch(segments: LatticeSegment[]): Promise<void>;
   tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]>;
   vocabulary(): Promise<string[]>;
   pipe(

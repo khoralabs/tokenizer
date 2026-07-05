@@ -34,9 +34,9 @@ export const createGraphStatements = async (database: TursoDatabase) => {
 
   const insertEdge = await database.prepare(`
     INSERT INTO edges (from_id, to_id, weight)
-    VALUES (?, ?, 1)
+    VALUES (?, ?, ?)
     ON CONFLICT(from_id, to_id)
-    DO UPDATE SET weight = weight + 1;
+    DO UPDATE SET weight = weight + excluded.weight;
   `);
 
   const selectTransitions = await database.prepare(`
@@ -89,8 +89,8 @@ export function bindInsertNode(row: GraphNodeInsert): [GraphNodeInsert["pattern"
 
 export function bindInsertEdge(
   row: GraphEdgeInsert,
-): [GraphEdgeInsert["from_id"], GraphEdgeInsert["to_id"]] {
-  return [row.from_id, row.to_id];
+): [GraphEdgeInsert["from_id"], GraphEdgeInsert["to_id"], number] {
+  return [row.from_id, row.to_id, row.weight ?? 1];
 }
 
 export function bindSelectNodeId(args: SelectNodeIdArgs): [SelectNodeIdArgs["pattern"]] {

@@ -45,7 +45,9 @@ export class Graph implements IGraph {
     return node.id;
   }
 
-  merge(from: string, to: string): { from_id: number; to_id: number } {
+  merge(from: string, to: string, delta = 1): { from_id: number; to_id: number } {
+    if (delta <= 0) return { from_id: this.getOrCreateNode(from), to_id: this.getOrCreateNode(to) };
+
     const from_id = this.getOrCreateNode(from);
     const to_id = this.getOrCreateNode(to);
 
@@ -53,14 +55,14 @@ export class Graph implements IGraph {
     const edge = this.edges.get(key);
 
     if (edge) {
-      edge.weight++;
+      edge.weight += delta;
     } else {
-      this.edges.set(key, { from_id, to_id, weight: 1 });
+      this.edges.set(key, { from_id, to_id, weight: delta });
     }
 
     const fromAdj = this.adjacencyList.get(from_id);
     if (!fromAdj) throw new Error(`Missing adjacency list for node ${from_id}`);
-    fromAdj.set(to_id, (fromAdj.get(to_id) || 0) + 1);
+    fromAdj.set(to_id, (fromAdj.get(to_id) || 0) + delta);
 
     return { from_id, to_id };
   }

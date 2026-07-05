@@ -32,7 +32,11 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepare": "husky",
-    "context": "bun run scripts/context.ts"
+    "context": "bun run scripts/context.ts",
+    "tokenizer": "bun scripts/tokenizer.ts"
+  },
+  "bin": {
+    "tokenizer": "./scripts/tokenizer.ts"
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.16",

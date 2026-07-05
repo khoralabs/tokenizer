@@ -2,7 +2,8 @@ import type { IAsyncLattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { createAsyncViterbiContext, decodeAsync } from "../tokenize";
-import { connectTurso, type TursoDatabase } from "./db";
+import { WAL_CHECKPOINT_INTERVAL } from "../wal";
+import { checkpointWal, connectTurso, type TursoDatabase } from "./db";
 import { DegreeScorer, Graph, type ITursoHubScorer } from "./graph";
 import { Trie } from "./trie";
 
@@ -18,6 +19,7 @@ export class Lattice implements IAsyncLattice {
   private db: TursoDatabase;
   private trie: Trie;
   private graph: Graph;
+  private writesSinceCheckpoint = 0;
 
   private constructor(db: TursoDatabase, graph: Graph, trie: Trie) {
     this.db = db;
@@ -35,23 +37,44 @@ export class Lattice implements IAsyncLattice {
     return new Lattice(db, graph, trie);
   }
 
-  async merge(pairs: [string, string][]): Promise<void> {
+  async merge(pairs: [string, string, number?][]): Promise<void> {
     const tx = this.db.transaction(async () => {
-      for (const [from, to] of pairs) {
-        const { from_id, to_id } = await this.graph.merge(from, to);
+      for (const [from, to, delta] of pairs) {
+        const { from_id, to_id } = await this.graph.merge(from, to, delta);
         await this.trie.merge(from, from_id);
         await this.trie.merge(to, to_id);
       }
     });
     await tx();
+    await this.maybeCheckpoint();
   }
 
   async ingest(segment: LatticeSegment): Promise<void> {
-    const markovId = await this.graph.getOrCreateNode(segment.key);
-    for (const element of segment.sequence) {
-      await this.trie.merge(element, markovId);
+    await this.ingestBatch([segment]);
+  }
+
+  async ingestBatch(segments: LatticeSegment[]): Promise<void> {
+    if (segments.length === 0) return;
+
+    const tx = this.db.transaction(async () => {
+      for (const segment of segments) {
+        const markovId = await this.graph.getOrCreateNode(segment.key);
+        for (const element of segment.sequence) {
+          await this.trie.merge(element, markovId);
+        }
+        await this.trie.merge(segment.key, markovId);
+      }
+    });
+    await tx();
+    await this.maybeCheckpoint();
+  }
+
+  private async maybeCheckpoint(): Promise<void> {
+    this.writesSinceCheckpoint++;
+    if (this.writesSinceCheckpoint >= WAL_CHECKPOINT_INTERVAL) {
+      await checkpointWal(this.db);
+      this.writesSinceCheckpoint = 0;
     }
-    await this.trie.merge(segment.key, markovId);
   }
 
   async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
@@ -107,6 +130,7 @@ export class Lattice implements IAsyncLattice {
   }
 
   async close(): Promise<void> {
+    await checkpointWal(this.db);
     await this.db.close();
   }
 }

@@ -78,10 +78,12 @@ export class Graph implements IGraph {
    * @param from - Source token
    * @param to - Destination token
    */
-  merge(from: string, to: string): { from_id: number; to_id: number } {
+  merge(from: string, to: string, delta = 1): { from_id: number; to_id: number } {
     const from_id = this.getOrCreateNode(from);
     const to_id = this.getOrCreateNode(to);
-    this.insertEdge.run(bind({ from_id, to_id }));
+    if (delta > 0) {
+      this.insertEdge.run(bind({ from_id, to_id, weight: delta }));
+    }
     return { from_id, to_id };
   }
 

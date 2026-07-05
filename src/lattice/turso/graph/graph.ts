@@ -42,11 +42,13 @@ export class Graph {
     return row.id as number;
   }
 
-  async merge(from: string, to: string): Promise<{ from_id: number; to_id: number }> {
+  async merge(from: string, to: string, delta = 1): Promise<{ from_id: number; to_id: number }> {
     const from_id = await this.getOrCreateNode(from);
     const to_id = await this.getOrCreateNode(to);
-    const edge: GraphEdgeInsert = { from_id, to_id };
-    await this.statements.insertEdge.run(...bindInsertEdge(edge));
+    if (delta > 0) {
+      const edge: GraphEdgeInsert = { from_id, to_id, weight: delta };
+      await this.statements.insertEdge.run(...bindInsertEdge(edge));
+    }
     return { from_id, to_id };
   }
 
