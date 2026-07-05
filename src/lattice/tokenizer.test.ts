@@ -37,6 +37,50 @@ describe("viterbiDecode", () => {
 
     expect(viterbiDecode("hello", ctx)).toEqual(["he", "llo"]);
   });
+
+  test("keeps competing prev-token states at the same position", () => {
+    const ctx = createViterbiContext({
+      matchCandidates(text, offset) {
+        const matches: { pattern: string; length: number }[] = [];
+        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
+        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
+        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
+        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
+        return matches;
+      },
+      getTransitionWeight(from, to) {
+        if (from === "a" && to === "b") return 100;
+        if (from === "ab" && to === "c") return 1;
+        return null;
+      },
+      getConfidence: () => 0,
+    });
+
+    // Only reachable completion is via (ab -> c); (a -> b -> c) is blocked at b -> c.
+    expect(viterbiDecode("abc", ctx)).toEqual(["ab", "c"]);
+  });
+
+  test("chooses path through prev-token state with stronger follow-on transition", () => {
+    const ctx = createViterbiContext({
+      matchCandidates(text, offset) {
+        const matches: { pattern: string; length: number }[] = [];
+        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
+        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
+        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
+        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
+        return matches;
+      },
+      getTransitionWeight(from, to) {
+        if (from === "a" && to === "b") return 100;
+        if (from === "b" && to === "c") return 50;
+        if (from === "ab" && to === "c") return 1;
+        return null;
+      },
+      getConfidence: () => 0,
+    });
+
+    expect(viterbiDecode("abc", ctx)).toEqual(["a", "b", "c"]);
+  });
 });
 
 describe("memory lattice tokenize", () => {

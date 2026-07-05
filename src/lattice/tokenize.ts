@@ -12,75 +12,143 @@ export interface AsyncViterbiContext {
   emissionScore(token: string): Promise<number>;
 }
 
-type Backpointer = { prevPos: number; token: string };
+/** Bigram backpointer: prevToken is the last-token state at prevPos. */
+type Backpointer = { prevPos: number; prevToken: string | null; token: string };
+
+type Layer = {
+  scores: Map<string | null, number>;
+  back: Map<string | null, Backpointer>;
+};
 
 const FALLBACK_EMISSION = 0;
 
-function reconstructTokens(
-  text: string,
-  n: number,
-  dp: number[],
-  back: (Backpointer | null)[],
-): string[] {
-  if (dp[n] === Number.NEGATIVE_INFINITY || back[n] === null) {
-    return text.split("");
+function createLayer(): Layer {
+  return { scores: new Map(), back: new Map() };
+}
+
+function updateLayer(layer: Layer, token: string, score: number, back: Backpointer): void {
+  const best = layer.scores.get(token) ?? Number.NEGATIVE_INFINITY;
+  if (score > best) {
+    layer.scores.set(token, score);
+    layer.back.set(token, back);
   }
+}
+
+function reconstructTokens(layers: Layer[], n: number, text: string): string[] {
+  const end = layers[n];
+  if (!end) return text.split("");
+
+  let bestToken: string | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const [token, score] of end.scores) {
+    if (token === null) continue;
+    if (score > bestScore) {
+      bestScore = score;
+      bestToken = token;
+    }
+  }
+
+  if (bestToken === null) return text.split("");
 
   const tokens: string[] = [];
   let pos = n;
-  while (pos > 0) {
-    const step = back[pos];
+  let lastToken: string | null = bestToken;
+
+  while (pos > 0 && lastToken !== null) {
+    const layer = layers[pos];
+    if (!layer) break;
+
+    const step = layer.back.get(lastToken);
     if (!step) break;
+
     tokens.unshift(step.token);
     pos = step.prevPos;
+    lastToken = step.prevToken;
   }
 
   return tokens;
+}
+
+function extendLayer(
+  _text: string,
+  n: number,
+  i: number,
+  prevToken: string | null,
+  baseScore: number,
+  candidates: MatchCandidate[],
+  fromTrie: boolean,
+  layers: Layer[],
+  ctx: Pick<ViterbiContext, "transitionWeight" | "emissionScore">,
+): void {
+  for (const { pattern, length } of candidates) {
+    const j = i + length;
+    if (j > n) continue;
+
+    const emission = fromTrie ? ctx.emissionScore(pattern) : FALLBACK_EMISSION;
+    const transition = ctx.transitionWeight(prevToken, pattern);
+    if (transition === Number.NEGATIVE_INFINITY) continue;
+
+    const score = baseScore + emission + transition;
+    const nextLayer = layers[j] ?? createLayer();
+    layers[j] = nextLayer;
+    updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+  }
+}
+
+async function extendLayerAsync(
+  _text: string,
+  n: number,
+  i: number,
+  prevToken: string | null,
+  baseScore: number,
+  candidates: MatchCandidate[],
+  fromTrie: boolean,
+  layers: Layer[],
+  ctx: Pick<AsyncViterbiContext, "transitionWeight" | "emissionScore">,
+): Promise<void> {
+  for (const { pattern, length } of candidates) {
+    const j = i + length;
+    if (j > n) continue;
+
+    const emission = fromTrie ? await ctx.emissionScore(pattern) : FALLBACK_EMISSION;
+    const transition = await ctx.transitionWeight(prevToken, pattern);
+    if (transition === Number.NEGATIVE_INFINITY) continue;
+
+    const score = baseScore + emission + transition;
+    const nextLayer = layers[j] ?? createLayer();
+    layers[j] = nextLayer;
+    updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+  }
 }
 
 export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {
   const n = text.length;
   if (n === 0) return [];
 
-  const dp = new Array<number>(n + 1).fill(Number.NEGATIVE_INFINITY);
-  const back = new Array<Backpointer | null>(n + 1).fill(null);
-  const tokenAt = new Array<string | null>(n + 1).fill(null);
-  dp[0] = 0;
+  const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
+  layers[0]?.scores.set(null, 0);
 
   for (let i = 0; i < n; i++) {
-    const baseScore = dp[i];
-    if (baseScore === undefined || baseScore === Number.NEGATIVE_INFINITY) continue;
+    const layer = layers[i];
+    if (!layer || layer.scores.size === 0) continue;
 
-    let candidates = ctx.matchCandidates(text, i);
-    const fromTrie = candidates.length > 0;
-    if (!fromTrie) {
-      const char = text[i];
-      if (char === undefined) continue;
-      candidates = [{ pattern: char, length: 1 }];
-    }
+    for (const [prevToken, baseScore] of layer.scores) {
+      if (baseScore === Number.NEGATIVE_INFINITY) continue;
 
-    const prevToken: string | null = i === 0 ? null : (tokenAt[i] ?? null);
-
-    for (const { pattern, length } of candidates) {
-      const j = i + length;
-      if (j > n) continue;
-
-      const emission = fromTrie ? ctx.emissionScore(pattern) : FALLBACK_EMISSION;
-
-      const transition = ctx.transitionWeight(prevToken, pattern);
-      if (transition === Number.NEGATIVE_INFINITY) continue;
-
-      const score = baseScore + emission + transition;
-      const best = dp[j] ?? Number.NEGATIVE_INFINITY;
-      if (score > best) {
-        dp[j] = score;
-        back[j] = { prevPos: i, token: pattern };
-        tokenAt[j] = pattern;
+      let candidates = ctx.matchCandidates(text, i);
+      const fromTrie = candidates.length > 0;
+      if (!fromTrie) {
+        const char = text[i];
+        if (char === undefined) continue;
+        candidates = [{ pattern: char, length: 1 }];
       }
+
+      extendLayer(text, n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx);
     }
   }
 
-  return reconstructTokens(text, n, dp, back);
+  return reconstructTokens(layers, n, text);
 }
 
 export async function viterbiDecodeAsync(
@@ -90,45 +158,29 @@ export async function viterbiDecodeAsync(
   const n = text.length;
   if (n === 0) return [];
 
-  const dp = new Array<number>(n + 1).fill(Number.NEGATIVE_INFINITY);
-  const back = new Array<Backpointer | null>(n + 1).fill(null);
-  const tokenAt = new Array<string | null>(n + 1).fill(null);
-  dp[0] = 0;
+  const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
+  layers[0]?.scores.set(null, 0);
 
   for (let i = 0; i < n; i++) {
-    const baseScore = dp[i];
-    if (baseScore === undefined || baseScore === Number.NEGATIVE_INFINITY) continue;
+    const layer = layers[i];
+    if (!layer || layer.scores.size === 0) continue;
 
-    let candidates = await ctx.matchCandidates(text, i);
-    const fromTrie = candidates.length > 0;
-    if (!fromTrie) {
-      const char = text[i];
-      if (char === undefined) continue;
-      candidates = [{ pattern: char, length: 1 }];
-    }
+    for (const [prevToken, baseScore] of layer.scores) {
+      if (baseScore === Number.NEGATIVE_INFINITY) continue;
 
-    const prevToken: string | null = i === 0 ? null : (tokenAt[i] ?? null);
-
-    for (const { pattern, length } of candidates) {
-      const j = i + length;
-      if (j > n) continue;
-
-      const emission = fromTrie ? await ctx.emissionScore(pattern) : FALLBACK_EMISSION;
-
-      const transition = await ctx.transitionWeight(prevToken, pattern);
-      if (transition === Number.NEGATIVE_INFINITY) continue;
-
-      const score = baseScore + emission + transition;
-      const best = dp[j] ?? Number.NEGATIVE_INFINITY;
-      if (score > best) {
-        dp[j] = score;
-        back[j] = { prevPos: i, token: pattern };
-        tokenAt[j] = pattern;
+      let candidates = await ctx.matchCandidates(text, i);
+      const fromTrie = candidates.length > 0;
+      if (!fromTrie) {
+        const char = text[i];
+        if (char === undefined) continue;
+        candidates = [{ pattern: char, length: 1 }];
       }
+
+      await extendLayerAsync(text, n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx);
     }
   }
 
-  return reconstructTokens(text, n, dp, back);
+  return reconstructTokens(layers, n, text);
 }
 
 export function createViterbiContext(deps: {
