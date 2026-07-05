@@ -7,10 +7,20 @@
       "import": "./src/index.ts",
       "types": "./src/index.ts"
     },
-    "./server": {
-      "bun": "./src/server.ts",
-      "node": "./src/server.ts",
-      "types": "./src/server.ts"
+    "./bun-sqlite": {
+      "bun": "./src/bun-sqlite.ts",
+      "node": "./src/bun-sqlite.ts",
+      "types": "./src/bun-sqlite.ts"
+    },
+    "./turso": {
+      "bun": "./src/turso.ts",
+      "node": "./src/turso.ts",
+      "types": "./src/turso.ts"
+    },
+    "./memory": {
+      "bun": "./src/memory.ts",
+      "node": "./src/memory.ts",
+      "types": "./src/memory.ts"
     }
   },
   "scripts": {

@@ -1,5 +1,3 @@
-export type { IAsyncLattice, ILattice } from "../lattice";
-export type { IHubScorer } from "../scorer";
 export { connectTurso, type TursoDatabase } from "./db";
 export {
   DegreeScorer as TursoDegreeScorer,

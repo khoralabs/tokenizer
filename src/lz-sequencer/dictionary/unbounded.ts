@@ -2,7 +2,7 @@ import type { Key } from "../../sequencer";
 import type { IDictionary } from "./dictionary";
 
 /**
- *
+ * The Unbounded dictionary grows indefinitely
  */
 export class Unbounded implements IDictionary {
   private _set = new Set<Key>();

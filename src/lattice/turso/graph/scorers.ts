@@ -1,8 +1,7 @@
+import type { IHubScorer } from "../../scorer";
 import type { TursoDatabase } from "../db";
 
-export interface ITursoHubScorer {
-  compute(db: TursoDatabase): Promise<void>;
-}
+export interface ITursoHubScorer extends IHubScorer<TursoDatabase> {}
 
 /**
  * Computes local hub scores for nodes based on weighted out-degree.
