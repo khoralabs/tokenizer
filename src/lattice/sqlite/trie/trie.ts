@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { ITrie } from "../../trie";
+import type { ITrie, MatchCandidate } from "../../trie";
 import { bind } from "../bind";
 import {
   createTrieStatements,
@@ -94,5 +94,28 @@ export class Trie implements ITrie {
     }
 
     return this.selectTrieChildren.all(bind({ parent_id })).map((r) => r.char);
+  }
+
+  matchCandidates(text: string, offset = 0): MatchCandidate[] {
+    const matches: MatchCandidate[] = [];
+    let parent_id: number | null = null;
+    let length = 0;
+
+    for (let i = offset; i < text.length; i++) {
+      const char = text[i];
+      if (char === undefined) break;
+
+      const row = this.selectTrieNode.get(bind({ parent_id, char }));
+      if (!row) break;
+
+      parent_id = row.id;
+      length++;
+
+      if (row.terminal === 1 && row.pattern !== null) {
+        matches.push({ pattern: row.pattern, length });
+      }
+    }
+
+    return matches;
   }
 }

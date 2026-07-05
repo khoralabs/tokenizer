@@ -338,6 +338,25 @@ const sequencer = createLZSequencer({
 });
 ```
 
+## Lattice tokenization
+
+Feed a corpus into a lattice-backed tokenizer, then segment new text with Viterbi decoding over learned transitions and vocabulary:
+
+```typescript
+import { createLatticeTokenizer, Lattice } from "@khoralabs/tkn/memory";
+
+const lattice = new Lattice();
+const tokenizer = createLatticeTokenizer(lattice);
+
+await tokenizer.feed("hello world ".repeat(100));
+
+console.log(tokenizer.tokenize("hello")); // e.g. ["he", "llo"] — Viterbi, not longest-prefix
+console.log(tokenizer.vocabulary());
+console.log(tokenizer.getTopTokens(5));
+```
+
+SQLite and Turso backends expose the same API via `@khoralabs/tkn/bun-sqlite` and `@khoralabs/tkn/turso` (`createAsyncLatticeTokenizer` for Turso).
+
 ## License
 
 MIT

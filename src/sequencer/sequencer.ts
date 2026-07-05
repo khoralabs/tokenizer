@@ -50,6 +50,10 @@ export interface ISequencer {
    */
   read(): AsyncGenerator<SequencerOutput, void, unknown>;
   /**
+   * Move pending queue outputs into history (for online lattice feeding).
+   */
+  drainPending(): SequencerOutput[];
+  /**
    * The history of segmentation outputs
    */
   readonly history: SequencerOutput[];
@@ -166,6 +170,10 @@ export class Sequencer<TGates extends IGate[] = IGate[]> implements ISequencer {
 
   read(): AsyncGenerator<SequencerOutput, void, unknown> {
     return this._queue.read();
+  }
+
+  drainPending(): SequencerOutput[] {
+    return this._queue.drainPending();
   }
 
   get history(): SequencerOutput[] {

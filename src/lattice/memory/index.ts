@@ -1,6 +1,9 @@
 export type { IGraph } from "../graph";
 export type { ILattice } from "../lattice";
 export type { IHubScorer } from "../scorer";
+export * from "../segment";
+export * from "../tokenize";
+export * from "../tokenizer";
 export type { ITrie } from "../trie";
 export * from "./graph";
 export * from "./lattice";

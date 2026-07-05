@@ -4,8 +4,11 @@ import { bind } from "../bind";
 import {
   createGraphStatements,
   createGraphTables,
+  type GetConfidenceStmt,
+  type GetTransitionWeightStmt,
   type InsertEdgeStmt,
   type InsertNodeStmt,
+  type ListPatternsStmt,
   type SelectNodeIdStmt,
   type SelectTopTokensStmt,
   type SelectTransitionsStmt,
@@ -16,12 +19,14 @@ export class Graph implements IGraph {
   private db: Database;
   private scorer: ISqliteHubScorer;
 
-  // Prepared statements
   private insertNode!: InsertNodeStmt;
   private selectNodeId!: SelectNodeIdStmt;
   private insertEdge!: InsertEdgeStmt;
   private selectTransitions!: SelectTransitionsStmt;
   private selectTopTokens!: SelectTopTokensStmt;
+  private listPatternsStmt!: ListPatternsStmt;
+  private getTransitionWeightStmt!: GetTransitionWeightStmt;
+  private getConfidenceStmt!: GetConfidenceStmt;
 
   constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer()) {
     this.db = database;
@@ -35,14 +40,25 @@ export class Graph implements IGraph {
   }
 
   private prepareStatements() {
-    const { insertNode, selectNodeId, insertEdge, selectTransitions, selectTopTokens } =
-      createGraphStatements(this.db);
+    const {
+      insertNode,
+      selectNodeId,
+      insertEdge,
+      selectTransitions,
+      selectTopTokens,
+      listPatterns,
+      getTransitionWeight,
+      getConfidence,
+    } = createGraphStatements(this.db);
 
     this.insertNode = insertNode;
     this.selectNodeId = selectNodeId;
     this.insertEdge = insertEdge;
     this.selectTransitions = selectTransitions;
     this.selectTopTokens = selectTopTokens;
+    this.listPatternsStmt = listPatterns;
+    this.getTransitionWeightStmt = getTransitionWeight;
+    this.getConfidenceStmt = getConfidence;
   }
 
   /**
@@ -100,5 +116,19 @@ export class Graph implements IGraph {
   getTopTokens(limit = 10): { pattern: string; confidence: number }[] {
     this.scorer.compute(this.db);
     return this.selectTopTokens.all(bind({ limit }));
+  }
+
+  listPatterns(): string[] {
+    return this.listPatternsStmt.all().map((row) => row.pattern);
+  }
+
+  getTransitionWeight(from: string, to: string): number | null {
+    const row = this.getTransitionWeightStmt.get(bind({ from, to }));
+    return row?.weight ?? null;
+  }
+
+  getConfidence(pattern: string): number {
+    const row = this.getConfidenceStmt.get(bind({ pattern }));
+    return row?.confidence ?? 0;
   }
 }

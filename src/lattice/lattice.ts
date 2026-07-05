@@ -1,3 +1,5 @@
+import type { LatticeSegment } from "./segment";
+
 /**
  * Interface for a Lattice that composes a Trie for token storage and a Graph for transitions.
  */
@@ -28,6 +30,19 @@ export interface ILattice {
    * @returns Array of tokens with confidences
    */
   getTopTokens(limit?: number): { pattern: string; confidence: number }[];
+
+  /**
+   * Ingest a single sequencer segment into the lattice.
+   */
+  ingest(segment: LatticeSegment): void;
+
+  /**
+   * Tokenize text via Viterbi decoding over graph transitions and trie candidates.
+   */
+  tokenize(text: string): string[];
+
+  /** All pattern strings in the graph vocabulary. */
+  vocabulary(): string[];
 
   /**
    * Pipes sequences from an async generator into the lattice.
@@ -61,6 +76,9 @@ export interface IAsyncLattice {
   getNext(from: string): Promise<{ to: string; weight: number }[]>;
   nextCharacters(prefix: string): Promise<string[]>;
   getTopTokens(limit?: number): Promise<{ pattern: string; confidence: number }[]>;
+  ingest(segment: LatticeSegment): Promise<void>;
+  tokenize(text: string): Promise<string[]>;
+  vocabulary(): Promise<string[]>;
   pipe(
     source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
     batchSize?: number,

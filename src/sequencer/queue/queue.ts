@@ -7,6 +7,8 @@ export interface IQueue {
   read(): AsyncGenerator<SequencerOutput, void, unknown>;
   close(): void;
   history: SequencerOutput[];
+  /** Move pending queue items into history without blocking for new input. */
+  drainPending(): SequencerOutput[];
 }
 
 type Resolver = (value: SequencerOutput) => void;
@@ -80,6 +82,16 @@ export class Queue implements IQueue {
 
   get history(): SequencerOutput[] {
     return this._history?.get() ?? [];
+  }
+
+  drainPending(): SequencerOutput[] {
+    const drained: SequencerOutput[] = [];
+    while (this._queue.length > 0) {
+      const item = Queue.consumeNext(this._queue, this._history);
+      if (item) drained.push(item);
+    }
+    Queue.drain(this._queue, this._resolvers, this._history);
+    return drained;
   }
 
   private static consumeNext(

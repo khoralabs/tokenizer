@@ -18,6 +18,15 @@ export type SelectTopTokensStmt = Statement<
   { pattern: string; confidence: number },
   [BunBind<{ limit: number }>]
 >;
+export type ListPatternsStmt = Statement<{ pattern: string }, []>;
+export type GetTransitionWeightStmt = Statement<
+  { weight: number },
+  [BunBind<{ from: string; to: string }>]
+>;
+export type GetConfidenceStmt = Statement<
+  { confidence: number },
+  [BunBind<Pick<GraphNode, "pattern">>]
+>;
 
 export const createGraphTables = (database: Database) =>
   database.run(`
@@ -72,6 +81,22 @@ export const createGraphStatements = (database: Database) => {
     LIMIT $limit
   `);
 
+  const listPatterns: ListPatternsStmt = database.query(`
+    SELECT token AS pattern FROM nodes ORDER BY token;
+  `);
+
+  const getTransitionWeight: GetTransitionWeightStmt = database.query(`
+    SELECT e.weight
+    FROM edges e
+    JOIN nodes nf ON nf.id = e.from_id
+    JOIN nodes nt ON nt.id = e.to_id
+    WHERE nf.token = $from AND nt.token = $to;
+  `);
+
+  const getConfidence: GetConfidenceStmt = database.query(`
+    SELECT hub_score AS confidence FROM nodes WHERE token = $pattern;
+  `);
+
   return {
     insertNode,
     selectNodeId,
@@ -79,5 +104,8 @@ export const createGraphStatements = (database: Database) => {
     selectTransitions,
     selectNodeCount,
     selectTopTokens,
+    listPatterns,
+    getTransitionWeight,
+    getConfidence,
   };
 };

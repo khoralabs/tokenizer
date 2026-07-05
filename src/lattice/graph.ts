@@ -30,4 +30,13 @@ export interface IGraph {
    * @returns Array of tokens with confidences
    */
   getTopTokens(limit?: number): { pattern: string; confidence: number }[];
+
+  /** All pattern strings stored in the graph. */
+  listPatterns(): string[];
+
+  /** Outgoing edge weight between two patterns, or null if absent. */
+  getTransitionWeight(from: string, to: string): number | null;
+
+  /** Hub score for a pattern, or 0 if unknown. */
+  getConfidence(pattern: string): number;
 }

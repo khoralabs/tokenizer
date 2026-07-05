@@ -98,4 +98,21 @@ export class Graph implements IGraph {
       .slice(0, limit)
       .map((node) => ({ pattern: node.token, confidence: node.hubScore }));
   }
+
+  listPatterns(): string[] {
+    return Array.from(this.nodes.keys());
+  }
+
+  getTransitionWeight(from: string, to: string): number | null {
+    const fromNode = this.nodes.get(from);
+    const toNode = this.nodes.get(to);
+    if (!fromNode || !toNode) return null;
+
+    const weight = this.adjacencyList.get(fromNode.id)?.get(toNode.id);
+    return weight ?? null;
+  }
+
+  getConfidence(pattern: string): number {
+    return this.nodes.get(pattern)?.hubScore ?? 0;
+  }
 }

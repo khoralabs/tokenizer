@@ -1,4 +1,6 @@
 import type { ILattice } from "../lattice";
+import type { LatticeSegment } from "../segment";
+import { createViterbiContext, viterbiDecode } from "../tokenize";
 import { Graph } from "./graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 import { Trie } from "./trie";
@@ -28,6 +30,28 @@ export class Lattice implements ILattice {
     }
   }
 
+  ingest(segment: LatticeSegment): void {
+    const markovId = this.graph.getOrCreateNode(segment.key);
+    for (const element of segment.sequence) {
+      this.trie.merge(element, markovId);
+    }
+    this.trie.merge(segment.key, markovId);
+  }
+
+  tokenize(text: string): string[] {
+    this.graph.getTopTokens(1);
+    const ctx = createViterbiContext({
+      matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
+      getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
+      getConfidence: (pattern) => this.graph.getConfidence(pattern),
+    });
+    return viterbiDecode(text, ctx);
+  }
+
+  vocabulary(): string[] {
+    return this.graph.listPatterns();
+  }
+
   getNext(from: string): { to: string; weight: number }[] {
     return this.graph.getNext(from);
   }
@@ -41,37 +65,28 @@ export class Lattice implements ILattice {
   }
 
   async pipe(
-    source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
+    source: AsyncGenerator<LatticeSegment, void, unknown>,
     batchSize = 1000,
   ): Promise<void> {
     const batch: [string, string][] = [];
     let previousPattern: string | null = null;
-    let previousMarkovId: number | null = null;
 
     for await (const segment of source) {
-      const currentPattern = segment.key;
+      this.ingest(segment);
 
-      // Get or create graph node for current pattern
-      const currentMarkovId = this.graph.getOrCreateNode(currentPattern);
-
-      // Insert sequence elements into trie (handles sentinels as whole elements)
-      for (const element of segment.sequence) {
-        this.trie.merge(element, currentMarkovId);
-      }
-
-      // Build graph transition from previous pattern to current pattern
-      if (previousPattern !== null && previousMarkovId !== null) {
-        this.graph.merge(previousPattern, currentPattern);
-
-        batch.push([previousPattern, currentPattern]);
+      if (previousPattern !== null) {
+        batch.push([previousPattern, segment.key]);
 
         if (batch.length >= batchSize) {
-          batch.splice(0, batchSize);
+          this.merge(batch.splice(0, batchSize));
         }
       }
 
-      previousPattern = currentPattern;
-      previousMarkovId = currentMarkovId;
+      previousPattern = segment.key;
+    }
+
+    if (batch.length > 0) {
+      this.merge(batch.splice(0));
     }
   }
 

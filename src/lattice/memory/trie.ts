@@ -1,4 +1,4 @@
-import type { ITrie } from "../trie";
+import type { ITrie, MatchCandidate } from "../trie";
 
 /** In-memory trie node (not validated by trie.model — that schema is for SQL backends). */
 interface TrieNode {
@@ -68,5 +68,26 @@ export class Trie implements ITrie {
     }
 
     return Array.from(current.children.keys());
+  }
+
+  matchCandidates(text: string, offset = 0): MatchCandidate[] {
+    const matches: MatchCandidate[] = [];
+    let current = this.root;
+    let length = 0;
+
+    for (let i = offset; i < text.length; i++) {
+      const char = text[i];
+      if (char === undefined) break;
+      const child = current.children.get(char);
+      if (!child) break;
+
+      current = child;
+      length++;
+      if (current.terminal && current.token !== undefined) {
+        matches.push({ pattern: current.token, length });
+      }
+    }
+
+    return matches;
   }
 }

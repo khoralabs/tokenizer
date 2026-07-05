@@ -1,4 +1,6 @@
 import type { IAsyncLattice } from "../lattice";
+import type { LatticeSegment } from "../segment";
+import { createAsyncViterbiContext, viterbiDecodeAsync } from "../tokenize";
 import { connectTurso, type TursoDatabase } from "./db";
 import { DegreeScorer, Graph, type ITursoHubScorer } from "./graph";
 import { Trie } from "./trie";
@@ -43,6 +45,28 @@ export class Lattice implements IAsyncLattice {
     await tx();
   }
 
+  async ingest(segment: LatticeSegment): Promise<void> {
+    const markovId = await this.graph.getOrCreateNode(segment.key);
+    for (const element of segment.sequence) {
+      await this.trie.merge(element, markovId);
+    }
+    await this.trie.merge(segment.key, markovId);
+  }
+
+  async tokenize(text: string): Promise<string[]> {
+    await this.graph.getTopTokens(1);
+    const ctx = createAsyncViterbiContext({
+      matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
+      getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
+      getConfidence: (pattern) => this.graph.getConfidence(pattern),
+    });
+    return viterbiDecodeAsync(text, ctx);
+  }
+
+  async vocabulary(): Promise<string[]> {
+    return this.graph.listPatterns();
+  }
+
   async getNext(from: string): Promise<{ to: string; weight: number }[]> {
     return this.graph.getNext(from);
   }
@@ -56,29 +80,24 @@ export class Lattice implements IAsyncLattice {
   }
 
   async pipe(
-    source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
+    source: AsyncGenerator<LatticeSegment, void, unknown>,
     batchSize = 1000,
   ): Promise<void> {
     const batch: [string, string][] = [];
     let previousPattern: string | null = null;
 
     for await (const segment of source) {
-      const currentPattern = segment.key;
-      const currentMarkovId = await this.graph.getOrCreateNode(currentPattern);
-
-      for (const element of segment.sequence) {
-        await this.trie.merge(element, currentMarkovId);
-      }
+      await this.ingest(segment);
 
       if (previousPattern !== null) {
-        batch.push([previousPattern, currentPattern]);
+        batch.push([previousPattern, segment.key]);
 
         if (batch.length >= batchSize) {
           await this.merge(batch.splice(0, batchSize));
         }
       }
 
-      previousPattern = currentPattern;
+      previousPattern = segment.key;
     }
 
     if (batch.length > 0) {

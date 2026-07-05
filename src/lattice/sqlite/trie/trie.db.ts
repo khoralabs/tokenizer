@@ -5,7 +5,7 @@ import type { BunBind } from "../bind";
 // Statement types
 export type InsertTrieNodeStmt = Statement<Pick<TrieNode, "id">, [BunBind<TrieNodeInsert>]>;
 export type SelectTrieNodeStmt = Statement<
-  Pick<TrieNode, "id">,
+  Pick<TrieNode, "id" | "terminal" | "pattern">,
   [BunBind<Pick<TrieNode, "parent_id" | "char">>]
 >;
 export type UpdateTrieTerminalStmt = Statement<void, [BunBind<TrieNodeUpdate>]>;
@@ -41,7 +41,7 @@ export const createTrieStatements = (database: Database) => {
   `);
 
   const selectTrieNode: SelectTrieNodeStmt = database.query(`
-    SELECT id FROM trie_nodes WHERE parent_id IS $parent_id AND char = $char;
+    SELECT id, terminal, pattern FROM trie_nodes WHERE parent_id IS $parent_id AND char = $char;
   `);
 
   const updateTrieTerminal: UpdateTrieTerminalStmt = database.query(`

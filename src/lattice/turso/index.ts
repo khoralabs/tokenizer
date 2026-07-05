@@ -1,3 +1,8 @@
+export {
+  type AsyncLatticeTokenizer,
+  createAsyncLatticeTokenizer,
+  type LatticeTokenizerOptions,
+} from "../tokenizer";
 export { connectTurso, type TursoDatabase } from "./db";
 export {
   DegreeScorer as TursoDegreeScorer,

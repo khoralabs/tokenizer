@@ -53,12 +53,31 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     LIMIT ?
   `);
 
+  const listPatterns = await database.prepare(`
+    SELECT token AS pattern FROM nodes ORDER BY token;
+  `);
+
+  const getTransitionWeight = await database.prepare(`
+    SELECT e.weight
+    FROM edges e
+    JOIN nodes nf ON nf.id = e.from_id
+    JOIN nodes nt ON nt.id = e.to_id
+    WHERE nf.token = ? AND nt.token = ?;
+  `);
+
+  const getConfidence = await database.prepare(`
+    SELECT hub_score AS confidence FROM nodes WHERE token = ?;
+  `);
+
   return {
     insertNode,
     selectNodeId,
     insertEdge,
     selectTransitions,
     selectTopTokens,
+    listPatterns,
+    getTransitionWeight,
+    getConfidence,
   };
 };
 
@@ -84,4 +103,12 @@ export function bindSelectTransitions(from: string): [string] {
 
 export function bindSelectTopTokens(args: SelectTopTokensArgs): [SelectTopTokensArgs["limit"]] {
   return [args.limit];
+}
+
+export function bindGetTransitionWeight(from: string, to: string): [string, string] {
+  return [from, to];
+}
+
+export function bindGetConfidence(pattern: string): [string] {
+  return [pattern];
 }

@@ -1,6 +1,8 @@
 /**
  * Interface for a prefix trie that stores tokens character by character.
  */
+export type MatchCandidate = { pattern: string; length: number };
+
 export interface ITrie {
   /**
    * Inserts a token into the trie, creating nodes character by character.
@@ -16,4 +18,9 @@ export interface ITrie {
    * @returns Array of child characters
    */
   nextCharacters(prefix: string): string[];
+
+  /**
+   * Returns all vocabulary patterns matching at offset in text.
+   */
+  matchCandidates(text: string, offset?: number): MatchCandidate[];
 }

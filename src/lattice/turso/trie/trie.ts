@@ -1,3 +1,4 @@
+import type { MatchCandidate } from "../../trie";
 import type { TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
 import type { TursoDatabase } from "../db";
 import {
@@ -72,5 +73,30 @@ export class Trie {
       ...bindSelectTrieChildren({ parent_id }),
     );
     return rows.map((r) => r.char as string);
+  }
+
+  async matchCandidates(text: string, offset = 0): Promise<MatchCandidate[]> {
+    const matches: MatchCandidate[] = [];
+    let parent_id: number | null = null;
+    let length = 0;
+
+    for (let i = offset; i < text.length; i++) {
+      const char = text[i];
+      if (char === undefined) break;
+
+      const row = (await this.statements.selectTrieNode.get(
+        ...bindSelectTrieNode({ parent_id, char }),
+      )) as { id: number; terminal: number; pattern: string | null } | undefined;
+      if (!row) break;
+
+      parent_id = row.id;
+      length++;
+
+      if (row.terminal === 1 && row.pattern !== null) {
+        matches.push({ pattern: row.pattern, length });
+      }
+    }
+
+    return matches;
   }
 }

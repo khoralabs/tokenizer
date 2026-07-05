@@ -1,6 +1,8 @@
 import type { GraphEdgeInsert, GraphNodeInsert } from "../../graph.model";
 import type { TursoDatabase } from "../db";
 import {
+  bindGetConfidence,
+  bindGetTransitionWeight,
   bindInsertEdge,
   bindInsertNode,
   bindSelectNodeId,
@@ -70,5 +72,20 @@ export class Graph {
       pattern: string;
       confidence: number;
     }[];
+  }
+
+  async listPatterns(): Promise<string[]> {
+    const rows = await this.statements.listPatterns.all();
+    return rows.map((row) => row.pattern as string);
+  }
+
+  async getTransitionWeight(from: string, to: string): Promise<number | null> {
+    const row = await this.statements.getTransitionWeight.get(...bindGetTransitionWeight(from, to));
+    return row?.weight ?? null;
+  }
+
+  async getConfidence(pattern: string): Promise<number> {
+    const row = await this.statements.getConfidence.get(...bindGetConfidence(pattern));
+    return row?.confidence ?? 0;
   }
 }
