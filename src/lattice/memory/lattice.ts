@@ -1,10 +1,10 @@
 import type { ILattice } from "../lattice";
 import { Graph } from "./graph";
-import { DegreeScorer, type IBrowserHubScorer } from "./scorers";
+import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 import { Trie } from "./trie";
 
-export interface BrowserLatticeConfig {
-  scorer?: IBrowserHubScorer;
+export interface MemoryLatticeConfig {
+  scorer?: IMemoryHubScorer;
 }
 
 /**
@@ -14,7 +14,7 @@ export class Lattice implements ILattice {
   private graph: Graph;
   private trie: Trie;
 
-  constructor(config: BrowserLatticeConfig = {}) {
+  constructor(config: MemoryLatticeConfig = {}) {
     const { scorer = new DegreeScorer() } = config;
     this.graph = new Graph(scorer);
     this.trie = new Trie();

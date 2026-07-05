@@ -19,7 +19,7 @@
     "check:write": "biome check --write .",
     "format": "biome check --write .",
     "format:check": "biome check .",
-    "typecheck": "tsc --noEmit -p packages/persistence/core/tsconfig.json && tsc --noEmit -p packages/attestation/tsconfig.json && tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/autolink/tsconfig.json && tsc --noEmit -p packages/persistence/sqlite/tsconfig.json && tsc --noEmit -p packages/persistence/turso-serverless/tsconfig.json && tsc --noEmit -p packages/projections/core/tsconfig.json && tsc --noEmit -p packages/projections/sqlite/tsconfig.json && tsc --noEmit -p packages/projections/turso/tsconfig.json && tsc --noEmit -p packages/react/graph/tsconfig.json && tsc --noEmit -p packages/agents/adapter/tsconfig.json && tsc --noEmit -p packages/agents/integrator/tsconfig.json && tsc --noEmit -p packages/agents/investigator/tsconfig.json && tsc --noEmit -p packages/agents/tools/tsconfig.json && tsc --noEmit -p packages/memories-service/storage/core/tsconfig.json && tsc --noEmit -p packages/memories-service/service/tsconfig.json && tsc --noEmit -p packages/memories-service/auth/tsconfig.json && tsc --noEmit -p packages/memories-service/http/tsconfig.json && tsc --noEmit -p packages/memories-service/client/tsconfig.json && tsc --noEmit -p packages/memories-service/storage/sqlite/tsconfig.json && tsc --noEmit -p packages/memories-service/storage/turso-serverless/tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepare": "husky",
     "context": "bun run scripts/context.ts"

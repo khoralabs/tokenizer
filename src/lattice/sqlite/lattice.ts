@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import type { ILattice } from "../lattice";
-import { DegreeScorer, Graph, type IBunHubScorer } from "./graph";
+import { DegreeScorer, Graph, type ISqliteHubScorer } from "./graph";
 import { Trie } from "./trie";
 
-export interface BunLatticeConfig {
+export interface SqliteLatticeConfig {
   filename?: string;
-  scorer?: IBunHubScorer;
+  scorer?: ISqliteHubScorer;
 }
 
 /**
@@ -16,7 +16,7 @@ export class Lattice implements ILattice {
   private trie: Trie;
   private graph: Graph;
 
-  constructor(config: BunLatticeConfig | string = {}) {
+  constructor(config: SqliteLatticeConfig | string = {}) {
     // Support legacy string parameter for filename
     const { filename = ":memory:", scorer = new DegreeScorer() } =
       typeof config === "string" ? { filename: config } : config;
@@ -37,10 +37,10 @@ export class Lattice implements ILattice {
    */
   merge(pairs: [string, string][]): void {
     const tx = this.db.transaction(() => {
-      for (let i = 0; i < pairs.length; i++) {
-        const { from_id, to_id } = this.graph.merge(pairs[i][0], pairs[i][1]);
-        this.trie.merge(pairs[i][0], from_id);
-        this.trie.merge(pairs[i][1], to_id);
+      for (const [from, to] of pairs) {
+        const { from_id, to_id } = this.graph.merge(from, to);
+        this.trie.merge(from, from_id);
+        this.trie.merge(to, to_id);
       }
     });
     tx();

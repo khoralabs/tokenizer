@@ -6,15 +6,12 @@ interface Node {
   hubScore: number;
 }
 
-export interface BrowserGraphContext {
+export interface MemoryGraphContext {
   nodes: Map<string, Node>;
   adjacencyList: Map<number, Map<number, number>>;
 }
 
-/**
- * Browser-specific hub scorer interface.
- */
-export interface IBrowserHubScorer extends IHubScorer<BrowserGraphContext> {}
+export interface IMemoryHubScorer extends IHubScorer<MemoryGraphContext> {}
 
 /**
  * Computes local hub scores for nodes based on weighted out-degree.
@@ -35,8 +32,8 @@ export interface IBrowserHubScorer extends IHubScorer<BrowserGraphContext> {}
  * suitable for online updates or incremental scoring where full
  * PageRank computation would be too expensive.
  */
-export class DegreeScorer implements IBrowserHubScorer {
-  compute(context: BrowserGraphContext): void {
+export class DegreeScorer implements IMemoryHubScorer {
+  compute(context: MemoryGraphContext): void {
     for (const node of context.nodes.values()) {
       const adjacency = context.adjacencyList.get(node.id);
 

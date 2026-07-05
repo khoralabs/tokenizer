@@ -9,11 +9,11 @@ import {
   type SelectTopTokensStmt,
   type SelectTransitionsStmt,
 } from "./graph.db";
-import { DegreeScorer, type IBunHubScorer } from "./scorers";
+import { DegreeScorer, type ISqliteHubScorer } from "./scorers";
 
 export class Graph implements IGraph {
   private db: Database;
-  private scorer: IBunHubScorer;
+  private scorer: ISqliteHubScorer;
 
   // Prepared statements
   private insertNode!: InsertNodeStmt;
@@ -22,7 +22,7 @@ export class Graph implements IGraph {
   private selectTransitions!: SelectTransitionsStmt;
   private selectTopTokens!: SelectTopTokensStmt;
 
-  constructor(database: Database, scorer: IBunHubScorer = new DegreeScorer()) {
+  constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer()) {
     this.db = database;
     this.scorer = scorer;
     this.initSchema();

@@ -1,5 +1,5 @@
 import type { IGraph } from "../graph";
-import { DegreeScorer, type IBrowserHubScorer } from "./scorers";
+import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 
 interface Node {
   id: number;
@@ -21,9 +21,9 @@ export class Graph implements IGraph {
   private nodeIdCounter = 0;
   private edges: Map<string, Edge> = new Map();
   private adjacencyList: Map<number, Map<number, number>> = new Map();
-  private scorer: IBrowserHubScorer;
+  private scorer: IMemoryHubScorer;
 
-  constructor(scorer: IBrowserHubScorer = new DegreeScorer()) {
+  constructor(scorer: IMemoryHubScorer = new DegreeScorer()) {
     this.scorer = scorer;
   }
 

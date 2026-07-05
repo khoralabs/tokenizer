@@ -1,10 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { IHubScorer } from "../../scorer";
 
-/**
- * Bun-specific hub scorer interface.
- */
-export interface IBunHubScorer extends IHubScorer<Database> {}
+export interface ISqliteHubScorer extends IHubScorer<Database> {}
 
 /**
  * Computes local hub scores for nodes based on weighted out-degree.
@@ -25,7 +22,7 @@ export interface IBunHubScorer extends IHubScorer<Database> {}
  * suitable for online updates or incremental scoring where full
  * PageRank computation would be too expensive.
  */
-export class DegreeScorer implements IBunHubScorer {
+export class DegreeScorer implements ISqliteHubScorer {
   private stmt?: ReturnType<Database["prepare"]>;
 
   compute(db: Database): void {
@@ -64,7 +61,7 @@ export class DegreeScorer implements IBunHubScorer {
  * @param iters - Number of iterations (default 15)
  * @param alpha - Damping factor (default 0.85)
  */
-export class PageRankScorer implements IBunHubScorer {
+export class PageRankScorer implements ISqliteHubScorer {
   constructor(
     private iters = 15,
     private alpha = 0.85,
