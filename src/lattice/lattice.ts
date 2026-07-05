@@ -52,3 +52,18 @@ export interface ILattice {
    */
   close(): void;
 }
+
+/**
+ * Async lattice interface for backends such as Turso that use non-blocking I/O.
+ */
+export interface IAsyncLattice {
+  merge(pairs: [string, string][]): Promise<void>;
+  getNext(from: string): Promise<{ to: string; weight: number }[]>;
+  nextCharacters(prefix: string): Promise<string[]>;
+  getTopTokens(limit?: number): Promise<{ pattern: string; confidence: number }[]>;
+  pipe(
+    source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
+    batchSize?: number,
+  ): Promise<void>;
+  close(): Promise<void>;
+}
