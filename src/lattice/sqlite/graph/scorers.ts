@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { IHubScorer } from "../../scorer";
+import { bind } from "../bind";
 
 export interface ISqliteHubScorer extends IHubScorer<Database> {}
 
@@ -103,7 +104,7 @@ export class PageRankScorer implements ISqliteHubScorer {
     // Run iterations
     for (let i = 0; i < this.iters; i++) {
       deleteNextStmt.run();
-      insertNextStmt.run({ base, alpha: this.alpha });
+      insertNextStmt.run(bind({ base, alpha: this.alpha }));
       deletePrStmt.run();
       insertPrStmt.run();
     }

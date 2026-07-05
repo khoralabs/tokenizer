@@ -53,20 +53,12 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     LIMIT ?
   `);
 
-  const computeDegree = await database.prepare(`
-    UPDATE nodes
-    SET hub_score = log(1 + COALESCE((
-      SELECT SUM(weight) FROM edges WHERE edges.from_id = nodes.id
-    ), 0))
-  `);
-
   return {
     insertNode,
     selectNodeId,
     insertEdge,
     selectTransitions,
     selectTopTokens,
-    computeDegree,
   };
 };
 

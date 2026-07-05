@@ -45,7 +45,7 @@ export const createTrieStatements = async (database: TursoDatabase) => {
   `);
 
   const selectTrieChildren = await database.prepare(`
-    SELECT char FROM trie_nodes WHERE parent_id = ?
+    SELECT char FROM trie_nodes WHERE parent_id IS ?
   `);
 
   return {

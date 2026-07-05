@@ -1,16 +1,17 @@
 import type { Database, Statement } from "bun:sqlite";
 import type { TrieNode, TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
+import type { BunBind } from "../bind";
 
 // Statement types
-export type InsertTrieNodeStmt = Statement<Pick<TrieNode, "id">, [TrieNodeInsert]>;
+export type InsertTrieNodeStmt = Statement<Pick<TrieNode, "id">, [BunBind<TrieNodeInsert>]>;
 export type SelectTrieNodeStmt = Statement<
   Pick<TrieNode, "id">,
-  [Pick<TrieNode, "parent_id" | "char">]
+  [BunBind<Pick<TrieNode, "parent_id" | "char">>]
 >;
-export type UpdateTrieTerminalStmt = Statement<void, [TrieNodeUpdate]>;
+export type UpdateTrieTerminalStmt = Statement<void, [BunBind<TrieNodeUpdate>]>;
 export type SelectTrieChildrenStmt = Statement<
   Pick<TrieNode, "char">,
-  [{ parent_id: number | null }]
+  [BunBind<{ parent_id: number | null }>]
 >;
 
 export const createTrieTable = (database: Database) =>
@@ -50,7 +51,7 @@ export const createTrieStatements = (database: Database) => {
   `);
 
   const selectTrieChildren: SelectTrieChildrenStmt = database.query(`
-    SELECT char FROM trie_nodes WHERE parent_id = $parent_id
+    SELECT char FROM trie_nodes WHERE parent_id IS $parent_id
   `);
 
   return {

@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { IGraph } from "../../graph";
+import { bind } from "../bind";
 import {
   createGraphStatements,
   createGraphTables,
@@ -50,8 +51,8 @@ export class Graph implements IGraph {
    * @returns The node id
    */
   getOrCreateNode(pattern: string): number {
-    this.insertNode.run({ pattern });
-    const row = this.selectNodeId.get({ pattern });
+    this.insertNode.run(bind({ pattern }));
+    const row = this.selectNodeId.get(bind({ pattern }));
     if (!row) throw new Error(`Failed to get/create node for pattern: ${pattern}`);
     return row.id;
   }
@@ -64,7 +65,7 @@ export class Graph implements IGraph {
   merge(from: string, to: string): { from_id: number; to_id: number } {
     const from_id = this.getOrCreateNode(from);
     const to_id = this.getOrCreateNode(to);
-    this.insertEdge.run({ from_id, to_id });
+    this.insertEdge.run(bind({ from_id, to_id }));
     return { from_id, to_id };
   }
 
@@ -88,7 +89,7 @@ export class Graph implements IGraph {
    * @returns Array of transitions with weights
    */
   getNext(from: string): { to: string; weight: number }[] {
-    return this.selectTransitions.all({ from });
+    return this.selectTransitions.all(bind({ from }));
   }
 
   /**
@@ -98,6 +99,6 @@ export class Graph implements IGraph {
    */
   getTopTokens(limit = 10): { pattern: string; confidence: number }[] {
     this.scorer.compute(this.db);
-    return this.selectTopTokens.all({ limit });
+    return this.selectTopTokens.all(bind({ limit }));
   }
 }

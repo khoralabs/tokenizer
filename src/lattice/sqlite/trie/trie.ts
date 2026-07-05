@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ITrie } from "../../trie";
+import { bind } from "../bind";
 import {
   createTrieStatements,
   createTrieTable,
@@ -58,7 +59,7 @@ export class Trie implements ITrie {
         })();
       const terminal = i === pattern.length - 1 ? 1 : 0;
 
-      const row = this.insertTrieNode.get({ parent_id, char, terminal });
+      const row = this.insertTrieNode.get(bind({ parent_id, char, terminal }));
       if (!row) throw new Error(`Failed to insert trie node for char: ${char}`);
       parent_id = row.id;
     }
@@ -66,12 +67,14 @@ export class Trie implements ITrie {
     if (parent_id === null) throw new Error("Failed to merge pattern");
 
     // Update terminal node with pattern and markov_id
-    this.updateTrieTerminal.run({
-      id: parent_id,
-      pattern,
-      markov_id,
-      terminal: 1,
-    });
+    this.updateTrieTerminal.run(
+      bind({
+        id: parent_id,
+        pattern,
+        markov_id,
+        terminal: 1,
+      }),
+    );
 
     return parent_id;
   }
@@ -85,11 +88,11 @@ export class Trie implements ITrie {
     let parent_id: number | null = null;
 
     for (const char of prefix) {
-      const row = this.selectTrieNode.get({ parent_id, char });
+      const row = this.selectTrieNode.get(bind({ parent_id, char }));
       if (!row) return [];
       parent_id = row.id;
     }
 
-    return this.selectTrieChildren.all({ parent_id }).map((r) => r.char);
+    return this.selectTrieChildren.all(bind({ parent_id })).map((r) => r.char);
   }
 }

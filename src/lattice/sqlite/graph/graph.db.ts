@@ -1,19 +1,22 @@
 import type { Database, Statement } from "bun:sqlite";
 import type { GraphEdgeInsert, GraphNode, GraphNodeInsert } from "../../graph.model";
+import type { BunBind } from "../bind";
 
 // Statement types
-export type InsertNodeStmt = Statement<void, [GraphNodeInsert]>;
-export type SelectNodeIdStmt = Statement<Pick<GraphNode, "id">, [Pick<GraphNode, "pattern">]>;
-export type InsertEdgeStmt = Statement<void, [GraphEdgeInsert]>;
-export type SelectTransitionsStmt = Statement<{ to: string; weight: number }, [{ from: string }]>;
+export type InsertNodeStmt = Statement<void, [BunBind<GraphNodeInsert>]>;
+export type SelectNodeIdStmt = Statement<
+  Pick<GraphNode, "id">,
+  [BunBind<Pick<GraphNode, "pattern">>]
+>;
+export type InsertEdgeStmt = Statement<void, [BunBind<GraphEdgeInsert>]>;
+export type SelectTransitionsStmt = Statement<
+  { to: string; weight: number },
+  [BunBind<{ from: string }>]
+>;
 export type SelectNodeCountStmt = Statement<{ count: number }, []>;
-export type ComputeDegreeStmt = Statement<void, []>;
-export type InitPageRankStmt = Statement<void, []>;
-export type PageRankIterationStmt = Statement<void, [{ base: number; alpha: number }]>;
-export type FinalizePageRankStmt = Statement<void, []>;
 export type SelectTopTokensStmt = Statement<
   { pattern: string; confidence: number },
-  [{ limit: number }]
+  [BunBind<{ limit: number }>]
 >;
 
 export const createGraphTables = (database: Database) =>
@@ -52,7 +55,7 @@ export const createGraphStatements = (database: Database) => {
   `);
 
   const selectTransitions: SelectTransitionsStmt = database.query(`
-    SELECT n.token AS to, e.weight
+    SELECT n.token AS "to", e.weight
     FROM edges e
     JOIN nodes n ON n.id = e.to_id
     WHERE e.from_id = (SELECT id FROM nodes WHERE token = $from)
@@ -69,47 +72,6 @@ export const createGraphStatements = (database: Database) => {
     LIMIT $limit
   `);
 
-  // Hub score computation
-  const computeDegree: ComputeDegreeStmt = database.query(`
-    UPDATE nodes
-    SET hub_score = log(1 + COALESCE((
-      SELECT SUM(weight) FROM edges WHERE edges.from_id = nodes.id
-    ), 0));
-  `);
-
-  const initPageRank: InitPageRankStmt = database.query(`
-    DROP TABLE IF EXISTS pr;
-    CREATE TEMP TABLE pr AS
-    SELECT id, 1.0 / (SELECT COUNT(*) FROM nodes) AS score FROM nodes;
-    DROP TABLE IF EXISTS pr_next;
-    CREATE TEMP TABLE pr_next (id INTEGER PRIMARY KEY, score REAL);
-  `);
-
-  const pageRankIteration: PageRankIterationStmt = database.query(`
-    DELETE FROM pr_next;
-    INSERT INTO pr_next
-    SELECT n.id,
-           $base + $alpha * COALESCE((
-               SELECT SUM(p.score * e.weight / (
-                 SELECT SUM(weight) FROM edges WHERE from_id = e.from_id
-               ))
-               FROM edges e
-               JOIN pr p ON p.id = e.from_id
-               WHERE e.to_id = n.id
-             ), 0)
-    FROM nodes n;
-    DELETE FROM pr;
-    INSERT INTO pr SELECT * FROM pr_next;
-  `);
-
-  const finalizePageRank: FinalizePageRankStmt = database.query(`
-    UPDATE nodes
-    SET hub_score = (
-      SELECT score / (SELECT MAX(score) FROM pr)
-      FROM pr WHERE pr.id = nodes.id
-    );
-  `);
-
   return {
     insertNode,
     selectNodeId,
@@ -117,9 +79,5 @@ export const createGraphStatements = (database: Database) => {
     selectTransitions,
     selectNodeCount,
     selectTopTokens,
-    computeDegree,
-    initPageRank,
-    pageRankIteration,
-    finalizePageRank,
   };
 };
