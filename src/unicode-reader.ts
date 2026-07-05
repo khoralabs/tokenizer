@@ -1,3 +1,5 @@
+import { join } from "node:path";
+
 /**
  * Convert a text string into an array of Unicode codepoints
  * Each codepoint is a number that represents one logical character
@@ -35,13 +37,27 @@ export async function* streamUnicodeFile(file: Bun.BunFile | File) {
 
       if (done) break;
 
-      const text = value.normalize("NFC"); // Normalize for cannonical stability
+      const text = value.normalize("NFC");
       for (let i = 0; i < text.length; i++) {
-        yield text[i];
+        const char = text[i];
+        if (char !== undefined) yield char;
       }
     }
   } finally {
     reader.releaseLock();
+  }
+}
+
+/**
+ * Stream characters from all files matching a glob pattern (NFC-normalized).
+ */
+export async function* streamUnicodeGlob(pattern: string, cwd = process.cwd()) {
+  const glob = new Bun.Glob(pattern);
+  for await (const path of glob.scan({ cwd, onlyFiles: true })) {
+    const filePath = path.startsWith("/") ? path : join(cwd, path);
+    for await (const char of streamUnicodeFile(Bun.file(filePath))) {
+      yield char;
+    }
   }
 }
 
@@ -50,4 +66,5 @@ export const Unicode = {
   toCodepoints,
   toString: codepointsToString,
   streamFile: streamUnicodeFile,
+  streamGlob: streamUnicodeGlob,
 };

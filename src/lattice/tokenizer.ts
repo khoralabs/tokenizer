@@ -1,7 +1,7 @@
 import { createLZSequencer } from "../lz-sequencer";
+import { createFeedState, feedInputStream, feedInputStreamAsync } from "../pipeline/feed";
 import type { Sequencer } from "../sequencer";
 import type { IAsyncLattice, ILattice } from "./lattice";
-import type { LatticeSegment } from "./segment";
 import type { LatticeDecodeOptions } from "./tokenize";
 
 export interface LatticeTokenizer {
@@ -23,106 +23,20 @@ export interface LatticeTokenizerOptions {
   transitionBatchSize?: number;
 }
 
-function toSegment(output: { key: string; sequence: readonly string[] }): LatticeSegment {
-  return { key: output.key, sequence: [...output.sequence] };
-}
-
-function ingestNewSegments(
-  lattice: ILattice,
-  history: { key: string; sequence: readonly string[] }[],
-  startIndex: number,
-  previousKey: string | null,
-  batch: [string, string][],
-  batchSize: number,
-): string | null {
-  let prev = previousKey;
-
-  for (let i = startIndex; i < history.length; i++) {
-    const output = history[i];
-    if (!output) continue;
-
-    const segment = toSegment(output);
-    lattice.ingest(segment);
-
-    if (prev !== null) {
-      batch.push([prev, segment.key]);
-      if (batch.length >= batchSize) {
-        lattice.merge(batch.splice(0, batchSize));
-      }
-    }
-
-    prev = segment.key;
-  }
-
-  if (batch.length > 0) {
-    lattice.merge(batch.splice(0));
-  }
-
-  return prev;
-}
-
-async function ingestNewSegmentsAsync(
-  lattice: IAsyncLattice,
-  history: { key: string; sequence: readonly string[] }[],
-  startIndex: number,
-  previousKey: string | null,
-  batch: [string, string][],
-  batchSize: number,
-): Promise<string | null> {
-  let prev = previousKey;
-
-  for (let i = startIndex; i < history.length; i++) {
-    const output = history[i];
-    if (!output) continue;
-
-    const segment = toSegment(output);
-    await lattice.ingest(segment);
-
-    if (prev !== null) {
-      batch.push([prev, segment.key]);
-      if (batch.length >= batchSize) {
-        await lattice.merge(batch.splice(0, batchSize));
-      }
-    }
-
-    prev = segment.key;
-  }
-
-  if (batch.length > 0) {
-    await lattice.merge(batch.splice(0));
-  }
-
-  return prev;
-}
-
 export function createLatticeTokenizer(
   lattice: ILattice,
   options: LatticeTokenizerOptions = {},
 ): LatticeTokenizer {
   const sequencer = options.sequencer ?? createLZSequencer({ historyOptions: { bounded: false } });
   const batchSize = options.transitionBatchSize ?? 1000;
-
-  let lastIngestedIndex = 0;
-  let previousKey: string | null = null;
-  const transitionBatch: [string, string][] = [];
+  const feedState = createFeedState();
 
   return {
     async feed(text: string) {
-      for (const char of text) {
-        sequencer.push(char);
+      async function* source() {
+        for (const char of text) yield char;
       }
-      await sequencer.flush();
-      sequencer.drainPending();
-
-      previousKey = ingestNewSegments(
-        lattice,
-        sequencer.history,
-        lastIngestedIndex,
-        previousKey,
-        transitionBatch,
-        batchSize,
-      );
-      lastIngestedIndex = sequencer.history.length;
+      await feedInputStream(lattice, sequencer, source(), feedState, batchSize);
     },
 
     tokenize(text: string, options?: LatticeDecodeOptions) {
@@ -145,28 +59,14 @@ export function createAsyncLatticeTokenizer(
 ): AsyncLatticeTokenizer {
   const sequencer = options.sequencer ?? createLZSequencer({ historyOptions: { bounded: false } });
   const batchSize = options.transitionBatchSize ?? 1000;
-
-  let lastIngestedIndex = 0;
-  let previousKey: string | null = null;
-  const transitionBatch: [string, string][] = [];
+  const feedState = createFeedState();
 
   return {
     async feed(text: string) {
-      for (const char of text) {
-        sequencer.push(char);
+      async function* source() {
+        for (const char of text) yield char;
       }
-      await sequencer.flush();
-      sequencer.drainPending();
-
-      previousKey = await ingestNewSegmentsAsync(
-        lattice,
-        sequencer.history,
-        lastIngestedIndex,
-        previousKey,
-        transitionBatch,
-        batchSize,
-      );
-      lastIngestedIndex = sequencer.history.length;
+      await feedInputStreamAsync(lattice, sequencer, source(), feedState, batchSize);
     },
 
     async tokenize(text: string, options?: LatticeDecodeOptions) {
