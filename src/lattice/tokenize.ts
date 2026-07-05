@@ -1,5 +1,7 @@
 export type MatchCandidate = { pattern: string; length: number };
 
+export type LatticeDecodeOptions = { mode?: "viterbi" } | { mode: "beam"; beamWidth: number };
+
 export interface ViterbiContext {
   matchCandidates(text: string, offset: number): MatchCandidate[];
   transitionWeight(from: string | null, to: string): number;
@@ -20,6 +22,8 @@ type Layer = {
   back: Map<string | null, Backpointer>;
 };
 
+type DecodeRunOptions = { beamWidth?: number };
+
 const FALLBACK_EMISSION = 0;
 
 function createLayer(): Layer {
@@ -32,6 +36,21 @@ function updateLayer(layer: Layer, token: string, score: number, back: Backpoint
     layer.scores.set(token, score);
     layer.back.set(token, back);
   }
+}
+
+function pruneLayer(layer: Layer, beamWidth: number): void {
+  if (layer.scores.size <= beamWidth) return;
+
+  const kept = [...layer.scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, beamWidth);
+  const scores = new Map<string | null, number>();
+  const back = new Map<string | null, Backpointer>();
+  for (const [token, score] of kept) {
+    scores.set(token, score);
+    const ptr = layer.back.get(token);
+    if (ptr) back.set(token, ptr);
+  }
+  layer.scores = scores;
+  layer.back = back;
 }
 
 function reconstructTokens(layers: Layer[], n: number, text: string): string[] {
@@ -71,7 +90,6 @@ function reconstructTokens(layers: Layer[], n: number, text: string): string[] {
 }
 
 function extendLayer(
-  _text: string,
   n: number,
   i: number,
   prevToken: string | null,
@@ -80,6 +98,7 @@ function extendLayer(
   fromTrie: boolean,
   layers: Layer[],
   ctx: Pick<ViterbiContext, "transitionWeight" | "emissionScore">,
+  beamWidth?: number,
 ): void {
   for (const { pattern, length } of candidates) {
     const j = i + length;
@@ -93,11 +112,11 @@ function extendLayer(
     const nextLayer = layers[j] ?? createLayer();
     layers[j] = nextLayer;
     updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+    if (beamWidth !== undefined) pruneLayer(nextLayer, beamWidth);
   }
 }
 
 async function extendLayerAsync(
-  _text: string,
   n: number,
   i: number,
   prevToken: string | null,
@@ -106,6 +125,7 @@ async function extendLayerAsync(
   fromTrie: boolean,
   layers: Layer[],
   ctx: Pick<AsyncViterbiContext, "transitionWeight" | "emissionScore">,
+  beamWidth?: number,
 ): Promise<void> {
   for (const { pattern, length } of candidates) {
     const j = i + length;
@@ -119,19 +139,22 @@ async function extendLayerAsync(
     const nextLayer = layers[j] ?? createLayer();
     layers[j] = nextLayer;
     updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+    if (beamWidth !== undefined) pruneLayer(nextLayer, beamWidth);
   }
 }
 
-export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {
+function runBigramDecode(text: string, ctx: ViterbiContext, options?: DecodeRunOptions): string[] {
   const n = text.length;
   if (n === 0) return [];
 
+  const beamWidth = options?.beamWidth;
   const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
   layers[0]?.scores.set(null, 0);
 
   for (let i = 0; i < n; i++) {
     const layer = layers[i];
     if (!layer || layer.scores.size === 0) continue;
+    if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
 
     for (const [prevToken, baseScore] of layer.scores) {
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
@@ -144,26 +167,29 @@ export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {
         candidates = [{ pattern: char, length: 1 }];
       }
 
-      extendLayer(text, n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx);
+      extendLayer(n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx, beamWidth);
     }
   }
 
   return reconstructTokens(layers, n, text);
 }
 
-export async function viterbiDecodeAsync(
+async function runBigramDecodeAsync(
   text: string,
   ctx: AsyncViterbiContext,
+  options?: DecodeRunOptions,
 ): Promise<string[]> {
   const n = text.length;
   if (n === 0) return [];
 
+  const beamWidth = options?.beamWidth;
   const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
   layers[0]?.scores.set(null, 0);
 
   for (let i = 0; i < n; i++) {
     const layer = layers[i];
     if (!layer || layer.scores.size === 0) continue;
+    if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
 
     for (const [prevToken, baseScore] of layer.scores) {
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
@@ -176,11 +202,66 @@ export async function viterbiDecodeAsync(
         candidates = [{ pattern: char, length: 1 }];
       }
 
-      await extendLayerAsync(text, n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx);
+      await extendLayerAsync(
+        n,
+        i,
+        prevToken,
+        baseScore,
+        candidates,
+        fromTrie,
+        layers,
+        ctx,
+        beamWidth,
+      );
     }
   }
 
   return reconstructTokens(layers, n, text);
+}
+
+export function decode(
+  text: string,
+  ctx: ViterbiContext,
+  options?: LatticeDecodeOptions,
+): string[] {
+  if (options?.mode === "beam") {
+    return beamDecode(text, ctx, options.beamWidth);
+  }
+  return viterbiDecode(text, ctx);
+}
+
+export async function decodeAsync(
+  text: string,
+  ctx: AsyncViterbiContext,
+  options?: LatticeDecodeOptions,
+): Promise<string[]> {
+  if (options?.mode === "beam") {
+    return beamDecodeAsync(text, ctx, options.beamWidth);
+  }
+  return viterbiDecodeAsync(text, ctx);
+}
+
+export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {
+  return runBigramDecode(text, ctx);
+}
+
+export async function viterbiDecodeAsync(
+  text: string,
+  ctx: AsyncViterbiContext,
+): Promise<string[]> {
+  return runBigramDecodeAsync(text, ctx);
+}
+
+export function beamDecode(text: string, ctx: ViterbiContext, beamWidth: number): string[] {
+  return runBigramDecode(text, ctx, { beamWidth });
+}
+
+export async function beamDecodeAsync(
+  text: string,
+  ctx: AsyncViterbiContext,
+  beamWidth: number,
+): Promise<string[]> {
+  return runBigramDecodeAsync(text, ctx, { beamWidth });
 }
 
 export function createViterbiContext(deps: {

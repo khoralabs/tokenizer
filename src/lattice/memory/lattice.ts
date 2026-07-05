@@ -1,6 +1,7 @@
 import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
-import { createViterbiContext, viterbiDecode } from "../tokenize";
+import type { LatticeDecodeOptions } from "../tokenize";
+import { createViterbiContext, decode } from "../tokenize";
 import { Graph } from "./graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 import { Trie } from "./trie";
@@ -38,14 +39,14 @@ export class Lattice implements ILattice {
     this.trie.merge(segment.key, markovId);
   }
 
-  tokenize(text: string): string[] {
+  tokenize(text: string, options?: LatticeDecodeOptions): string[] {
     this.graph.getTopTokens(1);
     const ctx = createViterbiContext({
       matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
       getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
       getConfidence: (pattern) => this.graph.getConfidence(pattern),
     });
-    return viterbiDecode(text, ctx);
+    return decode(text, ctx, options);
   }
 
   vocabulary(): string[] {

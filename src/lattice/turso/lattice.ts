@@ -1,6 +1,7 @@
 import type { IAsyncLattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
-import { createAsyncViterbiContext, viterbiDecodeAsync } from "../tokenize";
+import type { LatticeDecodeOptions } from "../tokenize";
+import { createAsyncViterbiContext, decodeAsync } from "../tokenize";
 import { connectTurso, type TursoDatabase } from "./db";
 import { DegreeScorer, Graph, type ITursoHubScorer } from "./graph";
 import { Trie } from "./trie";
@@ -53,14 +54,14 @@ export class Lattice implements IAsyncLattice {
     await this.trie.merge(segment.key, markovId);
   }
 
-  async tokenize(text: string): Promise<string[]> {
+  async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
     await this.graph.getTopTokens(1);
     const ctx = createAsyncViterbiContext({
       matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
       getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
       getConfidence: (pattern) => this.graph.getConfidence(pattern),
     });
-    return viterbiDecodeAsync(text, ctx);
+    return decodeAsync(text, ctx, options);
   }
 
   async vocabulary(): Promise<string[]> {

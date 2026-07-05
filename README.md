@@ -355,6 +355,12 @@ console.log(tokenizer.vocabulary());
 console.log(tokenizer.getTopTokens(5));
 ```
 
+For long inputs with a large vocabulary, pass an explicit beam width (approximate; same scoring as Viterbi):
+
+```typescript
+tokenizer.tokenize(longText, { mode: "beam", beamWidth: 32 });
+```
+
 SQLite and Turso backends expose the same API via `@khoralabs/tkn/bun-sqlite` and `@khoralabs/tkn/turso` (`createAsyncLatticeTokenizer` for Turso).
 
 ## License

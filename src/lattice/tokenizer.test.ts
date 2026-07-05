@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ILattice } from "./lattice";
 import { Lattice as MemoryLattice } from "./memory/lattice";
 import { Lattice as SqliteLattice } from "./sqlite/lattice";
-import { createViterbiContext, viterbiDecode } from "./tokenize";
+import { beamDecode, createViterbiContext, decode, viterbiDecode } from "./tokenize";
 import { createAsyncLatticeTokenizer, createLatticeTokenizer } from "./tokenizer";
 import { Lattice as TursoLattice } from "./turso/lattice";
 
@@ -80,6 +80,66 @@ describe("viterbiDecode", () => {
     });
 
     expect(viterbiDecode("abc", ctx)).toEqual(["a", "b", "c"]);
+  });
+});
+
+function abcBigramContext() {
+  return createViterbiContext({
+    matchCandidates(text, offset) {
+      const matches: { pattern: string; length: number }[] = [];
+      if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
+      if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
+      if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
+      if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
+      return matches;
+    },
+    getTransitionWeight(from, to) {
+      if (from === "a" && to === "b") return 100;
+      if (from === "b" && to === "c") return 50;
+      if (from === "ab" && to === "c") return 1;
+      return null;
+    },
+    getConfidence: () => 0,
+  });
+}
+
+describe("beamDecode", () => {
+  test("wide beam matches Viterbi on bigram cases", () => {
+    const ctx = abcBigramContext();
+    expect(beamDecode("abc", ctx, 1000)).toEqual(viterbiDecode("abc", ctx));
+  });
+
+  test("beamWidth 1 runs on simple input", () => {
+    const ctx = abcBigramContext();
+    const tokens = beamDecode("abc", ctx, 1);
+    expect(tokens.join("")).toBe("abc");
+  });
+
+  test("narrow beam can differ from Viterbi when winning state is pruned", () => {
+    const ctx = createViterbiContext({
+      matchCandidates(text, offset) {
+        const matches: { pattern: string; length: number }[] = [];
+        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
+        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
+        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
+        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
+        return matches;
+      },
+      getTransitionWeight(from, to) {
+        if (from === "a" && to === "b") return 100;
+        if (from === "ab" && to === "c") return 1;
+        return null;
+      },
+      getConfidence: () => 0,
+    });
+
+    expect(viterbiDecode("abc", ctx)).toEqual(["ab", "c"]);
+    expect(beamDecode("abc", ctx, 1)).not.toEqual(["ab", "c"]);
+  });
+
+  test("decode dispatcher selects beam mode", () => {
+    const ctx = abcBigramContext();
+    expect(decode("abc", ctx, { mode: "beam", beamWidth: 1000 })).toEqual(["a", "b", "c"]);
   });
 });
 
@@ -168,5 +228,25 @@ describe("backend tokenize parity", () => {
     expect((await tokenizer.vocabulary()).length).toBeGreaterThan(0);
 
     await lattice.close();
+  });
+
+  test("beam tokenize smoke on all backends", async () => {
+    const beamOpts = { mode: "beam" as const, beamWidth: 32 };
+
+    const memory = new MemoryLattice();
+    trainSplitHello(memory);
+    expect(memory.tokenize("hello", beamOpts)).toEqual(["he", "llo"]);
+    memory.close();
+
+    const sqlite = new SqliteLattice();
+    trainSplitHello(sqlite);
+    expect(sqlite.tokenize("hello", beamOpts)).toEqual(["he", "llo"]);
+    sqlite.close();
+
+    const turso = await TursoLattice.open(":memory:");
+    for (let i = 0; i < 20; i++) await turso.merge([["he", "llo"]]);
+    await turso.merge([["hello", "x"]]);
+    expect(await turso.tokenize("hello", beamOpts)).toEqual(["he", "llo"]);
+    await turso.close();
   });
 });
