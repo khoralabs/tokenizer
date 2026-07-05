@@ -1,5 +1,5 @@
 import type { Database, Statement } from "bun:sqlite";
-import type { TrieNode, TrieNodeInsert, TrieNodeUpdate } from "./trie.model";
+import type { TrieNode, TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
 
 // Statement types
 export type InsertTrieNodeStmt = Statement<Pick<TrieNode, "id">, [TrieNodeInsert]>;

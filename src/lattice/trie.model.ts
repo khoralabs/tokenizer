@@ -1,5 +1,7 @@
 import Type, { type Static } from "typebox";
 
+/** TypeBox schemas for persisted trie rows (SQLite / Turso). Not used by in-memory backends. */
+
 const positiveInteger = Type.Integer({ exclusiveMinimum: 0 });
 const nullablePositiveInteger = Type.Union([positiveInteger, Type.Null()]);
 const nullableString = Type.Union([Type.String(), Type.Null()]);

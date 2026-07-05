@@ -1,5 +1,7 @@
 import Type, { type Static } from "typebox";
 
+/** TypeBox schemas for persisted graph rows (SQLite / Turso). Not used by in-memory backends. */
+
 const positiveInteger = Type.Integer({ exclusiveMinimum: 0 });
 const positiveNumber = Type.Number({ exclusiveMinimum: 0 });
 

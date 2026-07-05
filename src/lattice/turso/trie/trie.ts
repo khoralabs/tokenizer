@@ -1,5 +1,15 @@
+import type { TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
 import type { TursoDatabase } from "../db";
-import { createTrieStatements, createTrieTable, type TrieStatements } from "./trie.db";
+import {
+  bindInsertTrieNode,
+  bindSelectTrieChildren,
+  bindSelectTrieNode,
+  bindUpdateTrieTerminal,
+  createTrieStatements,
+  createTrieTable,
+  type InsertTrieNodeRow,
+  type TrieStatements,
+} from "./trie.db";
 
 export class Trie {
   private statements!: TrieStatements;
@@ -21,16 +31,28 @@ export class Trie {
     for (let i = 0; i < pattern.length; i++) {
       const char = pattern[i];
       if (char === undefined) throw new Error("Out of range");
-      const terminal = i === pattern.length - 1 ? 1 : 0;
+      const insert: TrieNodeInsert = {
+        parent_id,
+        char,
+        terminal: i === pattern.length - 1 ? 1 : 0,
+      };
 
-      const row = await this.statements.insertTrieNode.get(parent_id, char, terminal, terminal);
+      const row = (await this.statements.insertTrieNode.get(...bindInsertTrieNode(insert))) as
+        | InsertTrieNodeRow
+        | undefined;
       if (!row) throw new Error(`Failed to insert trie node for char: ${char}`);
-      parent_id = row.id as number;
+      parent_id = row.id;
     }
 
     if (parent_id === null) throw new Error("Failed to merge pattern");
 
-    await this.statements.updateTrieTerminal.run(pattern, markov_id, parent_id);
+    const update: TrieNodeUpdate = {
+      id: parent_id,
+      pattern,
+      markov_id,
+      terminal: 1,
+    };
+    await this.statements.updateTrieTerminal.run(...bindUpdateTrieTerminal(update));
 
     return parent_id;
   }
@@ -39,12 +61,16 @@ export class Trie {
     let parent_id: number | null = null;
 
     for (const char of prefix) {
-      const row = await this.statements.selectTrieNode.get(parent_id, char);
+      const row = (await this.statements.selectTrieNode.get(
+        ...bindSelectTrieNode({ parent_id, char }),
+      )) as InsertTrieNodeRow | undefined;
       if (!row) return [];
-      parent_id = row.id as number;
+      parent_id = row.id;
     }
 
-    const rows = await this.statements.selectTrieChildren.all(parent_id);
+    const rows = await this.statements.selectTrieChildren.all(
+      ...bindSelectTrieChildren({ parent_id }),
+    );
     return rows.map((r) => r.char as string);
   }
 }

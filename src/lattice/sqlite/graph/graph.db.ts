@@ -1,5 +1,5 @@
 import type { Database, Statement } from "bun:sqlite";
-import type { GraphEdgeInsert, GraphNode, GraphNodeInsert } from "./graph.model";
+import type { GraphEdgeInsert, GraphNode, GraphNodeInsert } from "../../graph.model";
 
 // Statement types
 export type InsertNodeStmt = Statement<void, [GraphNodeInsert]>;
@@ -36,12 +36,12 @@ export const createGraphStatements = (database: Database) => {
   // Node and edge operations
   const insertNode: InsertNodeStmt = database.query(`
     INSERT INTO nodes (token)
-    VALUES ($token)
+    VALUES ($pattern)
     ON CONFLICT(token) DO NOTHING;
   `);
 
   const selectNodeId: SelectNodeIdStmt = database.query(
-    `SELECT id FROM nodes WHERE token = $token;`,
+    `SELECT id FROM nodes WHERE token = $pattern;`,
   );
 
   const insertEdge: InsertEdgeStmt = database.query(`

@@ -1,4 +1,4 @@
-import type { GraphEdgeInsert, GraphNodeInsert } from "../../sqlite/graph/graph.model";
+import type { GraphEdgeInsert, GraphNode, GraphNodeInsert } from "../../graph.model";
 import type { TursoDatabase } from "../db";
 
 export const createGraphTables = async (database: TursoDatabase) => {
@@ -19,6 +19,9 @@ export const createGraphTables = async (database: TursoDatabase) => {
 };
 
 export type GraphStatements = Awaited<ReturnType<typeof createGraphStatements>>;
+
+export type SelectNodeIdArgs = Pick<GraphNode, "pattern">;
+export type SelectTopTokensArgs = { limit: number };
 
 export const createGraphStatements = async (database: TursoDatabase) => {
   const insertNode = await database.prepare(`
@@ -67,5 +70,26 @@ export const createGraphStatements = async (database: TursoDatabase) => {
   };
 };
 
-export type InsertNodeArgs = [GraphNodeInsert["pattern"]];
-export type InsertEdgeArgs = [GraphEdgeInsert["from_id"], GraphEdgeInsert["to_id"]];
+export type { GraphEdgeInsert, GraphNodeInsert };
+
+export function bindInsertNode(row: GraphNodeInsert): [GraphNodeInsert["pattern"]] {
+  return [row.pattern];
+}
+
+export function bindInsertEdge(
+  row: GraphEdgeInsert,
+): [GraphEdgeInsert["from_id"], GraphEdgeInsert["to_id"]] {
+  return [row.from_id, row.to_id];
+}
+
+export function bindSelectNodeId(args: SelectNodeIdArgs): [SelectNodeIdArgs["pattern"]] {
+  return [args.pattern];
+}
+
+export function bindSelectTransitions(from: string): [string] {
+  return [from];
+}
+
+export function bindSelectTopTokens(args: SelectTopTokensArgs): [SelectTopTokensArgs["limit"]] {
+  return [args.limit];
+}

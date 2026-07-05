@@ -1,5 +1,15 @@
+import type { GraphEdgeInsert, GraphNodeInsert } from "../../graph.model";
 import type { TursoDatabase } from "../db";
-import { createGraphStatements, createGraphTables, type GraphStatements } from "./graph.db";
+import {
+  bindInsertEdge,
+  bindInsertNode,
+  bindSelectNodeId,
+  bindSelectTopTokens,
+  bindSelectTransitions,
+  createGraphStatements,
+  createGraphTables,
+  type GraphStatements,
+} from "./graph.db";
 import { DegreeScorer, type ITursoHubScorer } from "./scorers";
 
 export class Graph {
@@ -23,8 +33,9 @@ export class Graph {
   }
 
   async getOrCreateNode(pattern: string): Promise<number> {
-    await this.statements.insertNode.run(pattern);
-    const row = await this.statements.selectNodeId.get(pattern);
+    const insert: GraphNodeInsert = { pattern };
+    await this.statements.insertNode.run(...bindInsertNode(insert));
+    const row = await this.statements.selectNodeId.get(...bindSelectNodeId({ pattern }));
     if (!row) throw new Error(`Failed to get/create node for pattern: ${pattern}`);
     return row.id as number;
   }
@@ -32,7 +43,8 @@ export class Graph {
   async merge(from: string, to: string): Promise<{ from_id: number; to_id: number }> {
     const from_id = await this.getOrCreateNode(from);
     const to_id = await this.getOrCreateNode(to);
-    await this.statements.insertEdge.run(from_id, to_id);
+    const edge: GraphEdgeInsert = { from_id, to_id };
+    await this.statements.insertEdge.run(...bindInsertEdge(edge));
     return { from_id, to_id };
   }
 
@@ -46,7 +58,7 @@ export class Graph {
   }
 
   async getNext(from: string): Promise<{ to: string; weight: number }[]> {
-    return (await this.statements.selectTransitions.all(from)) as {
+    return (await this.statements.selectTransitions.all(...bindSelectTransitions(from))) as {
       to: string;
       weight: number;
     }[];
@@ -54,7 +66,7 @@ export class Graph {
 
   async getTopTokens(limit = 10): Promise<{ pattern: string; confidence: number }[]> {
     await this.scorer.compute(this.db);
-    return (await this.statements.selectTopTokens.all(limit)) as {
+    return (await this.statements.selectTopTokens.all(...bindSelectTopTokens({ limit }))) as {
       pattern: string;
       confidence: number;
     }[];

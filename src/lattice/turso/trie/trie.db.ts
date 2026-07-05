@@ -1,3 +1,4 @@
+import type { TrieNode, TrieNodeInsert, TrieNodeUpdate } from "../../trie.model";
 import type { TursoDatabase } from "../db";
 
 export const createTrieTable = async (database: TursoDatabase) => {
@@ -19,6 +20,10 @@ export const createTrieTable = async (database: TursoDatabase) => {
 };
 
 export type TrieStatements = Awaited<ReturnType<typeof createTrieStatements>>;
+
+export type InsertTrieNodeRow = Pick<TrieNode, "id">;
+export type SelectTrieNodeArgs = Pick<TrieNode, "parent_id" | "char">;
+export type SelectTrieChildrenArgs = { parent_id: TrieNode["parent_id"] };
 
 export const createTrieStatements = async (database: TursoDatabase) => {
   const insertTrieNode = await database.prepare(`
@@ -50,3 +55,34 @@ export const createTrieStatements = async (database: TursoDatabase) => {
     selectTrieChildren,
   };
 };
+
+export type { TrieNodeInsert, TrieNodeUpdate };
+
+export function bindInsertTrieNode(
+  row: TrieNodeInsert,
+): [
+  TrieNodeInsert["parent_id"],
+  TrieNodeInsert["char"],
+  TrieNodeInsert["terminal"],
+  TrieNodeInsert["terminal"],
+] {
+  return [row.parent_id, row.char, row.terminal, row.terminal];
+}
+
+export function bindUpdateTrieTerminal(
+  row: TrieNodeUpdate,
+): [TrieNodeUpdate["pattern"], TrieNodeUpdate["markov_id"], TrieNodeUpdate["id"]] {
+  return [row.pattern, row.markov_id, row.id];
+}
+
+export function bindSelectTrieNode(
+  args: SelectTrieNodeArgs,
+): [SelectTrieNodeArgs["parent_id"], SelectTrieNodeArgs["char"]] {
+  return [args.parent_id, args.char];
+}
+
+export function bindSelectTrieChildren(
+  args: SelectTrieChildrenArgs,
+): [SelectTrieChildrenArgs["parent_id"]] {
+  return [args.parent_id];
+}

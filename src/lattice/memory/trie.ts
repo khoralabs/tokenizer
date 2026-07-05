@@ -1,5 +1,6 @@
 import type { ITrie } from "../trie";
 
+/** In-memory trie node (not validated by trie.model — that schema is for SQL backends). */
 interface TrieNode {
   id: number;
   parent_id: number | null;

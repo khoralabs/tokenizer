@@ -1,6 +1,7 @@
 import type { IGraph } from "../graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 
+/** In-memory node shape (not validated by graph.model — that schema is for SQL backends). */
 interface Node {
   id: number;
   token: string;
