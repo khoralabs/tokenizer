@@ -6,7 +6,8 @@ export const createGraphTables = async (database: TursoDatabase) => {
     CREATE TABLE IF NOT EXISTS nodes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       token TEXT UNIQUE NOT NULL,
-      hub_score REAL DEFAULT 0
+      hub_score REAL DEFAULT 0,
+      token_count INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS edges (
@@ -16,6 +17,11 @@ export const createGraphTables = async (database: TursoDatabase) => {
       PRIMARY KEY (from_id, to_id)
     );
   `);
+
+  const columns = await (await database.prepare("PRAGMA table_info(nodes)")).all();
+  if (!columns.some((column) => (column as { name: string }).name === "token_count")) {
+    await database.exec("ALTER TABLE nodes ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0");
+  }
 };
 
 export type GraphStatements = Awaited<ReturnType<typeof createGraphStatements>>;
@@ -67,6 +73,30 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     SELECT hub_score AS confidence FROM nodes WHERE token = ?;
   `);
 
+  const recordEmission = await database.prepare(`
+    INSERT INTO nodes (token, token_count)
+    VALUES (?, ?)
+    ON CONFLICT(token) DO UPDATE SET token_count = token_count + excluded.token_count;
+  `);
+
+  const getTokenCount = await database.prepare(`
+    SELECT token_count FROM nodes WHERE token = ?;
+  `);
+
+  const getTotalEmissions = await database.prepare(`
+    SELECT COALESCE(SUM(token_count), 0) AS total FROM nodes;
+  `);
+
+  const getVocabSize = await database.prepare(`
+    SELECT COUNT(*) AS count FROM nodes;
+  `);
+
+  const getOutgoingTotal = await database.prepare(`
+    SELECT COALESCE(SUM(e.weight), 0) AS total
+    FROM edges e
+    WHERE e.from_id = (SELECT id FROM nodes WHERE token = ?);
+  `);
+
   return {
     upsertNode,
     insertEdge,
@@ -75,6 +105,11 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     listPatterns,
     getTransitionWeight,
     getConfidence,
+    recordEmission,
+    getTokenCount,
+    getTotalEmissions,
+    getVocabSize,
+    getOutgoingTotal,
   };
 };
 
@@ -104,6 +139,18 @@ export function bindGetTransitionWeight(from: string, to: string): [string, stri
 
 export function bindGetConfidence(pattern: string): [string] {
   return [pattern];
+}
+
+export function bindRecordEmission(pattern: string, delta: number): [string, number] {
+  return [pattern, delta];
+}
+
+export function bindGetTokenCount(pattern: string): [string] {
+  return [pattern];
+}
+
+export function bindGetOutgoingTotal(from: string): [string] {
+  return [from];
 }
 
 export type UpsertNodeRow = Pick<GraphNode, "id">;

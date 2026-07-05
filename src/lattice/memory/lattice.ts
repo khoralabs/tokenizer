@@ -1,7 +1,8 @@
+import { tokenizeWithLm } from "../decode-lm";
+import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
-import { createViterbiContext, decode } from "../tokenize";
 import { Graph } from "./graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 import { Trie } from "./trie";
@@ -35,28 +36,21 @@ export class Lattice implements ILattice {
   }
 
   ingestBatch(segments: LatticeSegment[]): void {
-    for (const segment of segments) {
-      const markovId = this.graph.getOrCreateNode(segment.key);
-      for (const element of segment.sequence) {
-        this.trie.merge(element, markovId);
-      }
-      this.trie.merge(segment.key, markovId);
-    }
+    ingestSegmentBatch(this.graph, this.trie, segments);
   }
 
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void {
-    this.ingestBatch(segments);
+    ingestSegmentBatch(this.graph, this.trie, segments);
     this.merge(pairs);
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    this.graph.getTopTokens(1);
-    const ctx = createViterbiContext({
-      matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
-      getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
-      getConfidence: (pattern) => this.graph.getConfidence(pattern),
-    });
-    return decode(text, ctx, options);
+    return tokenizeWithLm(
+      text,
+      this.graph,
+      (input, offset) => this.trie.matchCandidates(input, offset),
+      options,
+    );
   }
 
   vocabulary(): string[] {

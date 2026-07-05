@@ -1,3 +1,4 @@
+import { ingestSegmentBatchAsync } from "../ingest-segment";
 import type { IAsyncLattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
@@ -64,13 +65,7 @@ export class Lattice implements IAsyncLattice {
     if (segments.length === 0) return;
 
     const tx = this.db.transaction(async () => {
-      for (const segment of segments) {
-        const markovId = await this.graph.getOrCreateNode(segment.key);
-        for (const element of segment.sequence) {
-          await this.trie.merge(element, markovId);
-        }
-        await this.trie.merge(segment.key, markovId);
-      }
+      await ingestSegmentBatchAsync(this.graph, this.trie, segments);
     });
     await tx();
     await this.maybeCheckpoint();
@@ -83,13 +78,7 @@ export class Lattice implements IAsyncLattice {
     if (segments.length === 0 && pairs.length === 0) return;
 
     const tx = this.db.transaction(async () => {
-      for (const segment of segments) {
-        const markovId = await this.graph.getOrCreateNode(segment.key);
-        for (const element of segment.sequence) {
-          await this.trie.merge(element, markovId);
-        }
-        await this.trie.merge(segment.key, markovId);
-      }
+      await ingestSegmentBatchAsync(this.graph, this.trie, segments);
       for (const [from, to, delta] of pairs) {
         await this.graph.merge(from, to, delta);
       }
@@ -108,11 +97,13 @@ export class Lattice implements IAsyncLattice {
   }
 
   async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
-    await this.graph.getTopTokens(1);
     const ctx = createAsyncViterbiContext({
       matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
+      getTokenCount: (pattern) => this.graph.getTokenCount(pattern),
+      getTotalEmissions: () => this.graph.getTotalEmissions(),
+      getVocabSize: () => this.graph.getVocabSize(),
       getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
-      getConfidence: (pattern) => this.graph.getConfidence(pattern),
+      getOutgoingTotal: (from) => this.graph.getOutgoingTotal(from),
     });
     return decodeAsync(text, ctx, options);
   }

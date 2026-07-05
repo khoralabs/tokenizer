@@ -3,6 +3,11 @@
  */
 export interface IGraph {
   /**
+   * Gets or creates a node for a token.
+   */
+  getOrCreateNode(pattern: string): number;
+
+  /**
    * Adds a transition between two tokens (creates nodes if needed).
    * @param from - Source token
    * @param to - Destination token
@@ -39,4 +44,19 @@ export interface IGraph {
 
   /** Hub score for a pattern, or 0 if unknown. */
   getConfidence(pattern: string): number;
+
+  /** Record a token emission during ingest (unigram count). */
+  recordEmission(pattern: string, delta?: number): void;
+
+  /** Emission count for a pattern. */
+  getTokenCount(pattern: string): number;
+
+  /** Sum of all token emission counts. */
+  getTotalEmissions(): number;
+
+  /** Number of vocabulary nodes. */
+  getVocabSize(): number;
+
+  /** Sum of outgoing edge weights for a pattern. */
+  getOutgoingTotal(from: string): number;
 }

@@ -23,13 +23,46 @@ export type GetConfidenceStmt = Statement<
   { confidence: number },
   [BunBind<Pick<GraphNode, "pattern">>]
 >;
+export type RecordEmissionStmt = Statement<void, [BunBind<{ pattern: string; delta: number }>]>;
+export type GetTokenCountStmt = Statement<
+  { token_count: number },
+  [BunBind<Pick<GraphNode, "pattern">>]
+>;
+export type GetTotalEmissionsStmt = Statement<{ total: number }, []>;
+export type GetVocabSizeStmt = Statement<{ count: number }, []>;
+export type GetOutgoingTotalStmt = Statement<{ total: number }, [BunBind<{ from: string }>]>;
 
-export const createGraphTables = (database: Database) =>
+export const createGraphTables = (database: Database, options?: { readonly?: boolean }) => {
+  if (!options?.readonly) {
+    database.run(`
+      CREATE TABLE IF NOT EXISTS nodes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT UNIQUE NOT NULL,
+        hub_score REAL DEFAULT 0,
+        token_count INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS edges (
+        from_id INTEGER NOT NULL,
+        to_id INTEGER NOT NULL,
+        weight REAL DEFAULT 1,
+        PRIMARY KEY (from_id, to_id)
+      );
+    `);
+
+    const columns = database.query("PRAGMA table_info(nodes)").all() as { name: string }[];
+    if (!columns.some((column) => column.name === "token_count")) {
+      database.run("ALTER TABLE nodes ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0");
+    }
+    return;
+  }
+
   database.run(`
     CREATE TABLE IF NOT EXISTS nodes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       token TEXT UNIQUE NOT NULL,
-      hub_score REAL DEFAULT 0
+      hub_score REAL DEFAULT 0,
+      token_count INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS edges (
@@ -39,8 +72,14 @@ export const createGraphTables = (database: Database) =>
       PRIMARY KEY (from_id, to_id)
     );
   `);
+};
 
-export const createGraphStatements = (database: Database) => {
+export function hasTokenCountColumn(database: Database): boolean {
+  const columns = database.query("PRAGMA table_info(nodes)").all() as { name: string }[];
+  return columns.some((column) => column.name === "token_count");
+}
+
+export const createGraphStatements = (database: Database, options?: { tokenCounts?: boolean }) => {
   const upsertNode: UpsertNodeStmt = database.query(`
     INSERT INTO nodes (token)
     VALUES ($pattern)
@@ -89,6 +128,44 @@ export const createGraphStatements = (database: Database) => {
     SELECT hub_score AS confidence FROM nodes WHERE token = $pattern;
   `);
 
+  const getOutgoingTotal: GetOutgoingTotalStmt = database.query(`
+    SELECT COALESCE(SUM(e.weight), 0) AS total
+    FROM edges e
+    WHERE e.from_id = (SELECT id FROM nodes WHERE token = $from);
+  `);
+
+  if (options?.tokenCounts === false) {
+    return {
+      upsertNode,
+      insertEdge,
+      selectTransitions,
+      selectNodeCount,
+      selectTopTokens,
+      listPatterns,
+      getTransitionWeight,
+      getConfidence,
+      getOutgoingTotal,
+    };
+  }
+
+  const recordEmission: RecordEmissionStmt = database.query(`
+    INSERT INTO nodes (token, token_count)
+    VALUES ($pattern, $delta)
+    ON CONFLICT(token) DO UPDATE SET token_count = token_count + excluded.token_count;
+  `);
+
+  const getTokenCount: GetTokenCountStmt = database.query(`
+    SELECT token_count FROM nodes WHERE token = $pattern;
+  `);
+
+  const getTotalEmissions: GetTotalEmissionsStmt = database.query(`
+    SELECT COALESCE(SUM(token_count), 0) AS total FROM nodes;
+  `);
+
+  const getVocabSize: GetVocabSizeStmt = database.query(`
+    SELECT COUNT(*) AS count FROM nodes;
+  `);
+
   return {
     upsertNode,
     insertEdge,
@@ -98,5 +175,10 @@ export const createGraphStatements = (database: Database) => {
     listPatterns,
     getTransitionWeight,
     getConfidence,
+    recordEmission,
+    getTokenCount,
+    getTotalEmissions,
+    getVocabSize,
+    getOutgoingTotal,
   };
 };

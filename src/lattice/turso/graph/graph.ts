@@ -2,8 +2,11 @@ import type { GraphEdgeInsert, GraphNodeInsert } from "../../graph.model";
 import type { TursoDatabase } from "../db";
 import {
   bindGetConfidence,
+  bindGetOutgoingTotal,
+  bindGetTokenCount,
   bindGetTransitionWeight,
   bindInsertEdge,
+  bindRecordEmission,
   bindSelectTopTokens,
   bindSelectTransitions,
   bindUpsertNode,
@@ -95,5 +98,31 @@ export class Graph {
   async getConfidence(pattern: string): Promise<number> {
     const row = await this.statements.getConfidence.get(...bindGetConfidence(pattern));
     return row?.confidence ?? 0;
+  }
+
+  async recordEmission(pattern: string, delta = 1): Promise<void> {
+    if (delta <= 0) return;
+    await this.statements.recordEmission.run(...bindRecordEmission(pattern, delta));
+    this.nodeIdCache.delete(pattern);
+  }
+
+  async getTokenCount(pattern: string): Promise<number> {
+    const row = await this.statements.getTokenCount.get(...bindGetTokenCount(pattern));
+    return (row?.token_count as number | undefined) ?? 0;
+  }
+
+  async getTotalEmissions(): Promise<number> {
+    const row = await this.statements.getTotalEmissions.get();
+    return (row?.total as number | undefined) ?? 0;
+  }
+
+  async getVocabSize(): Promise<number> {
+    const row = await this.statements.getVocabSize.get();
+    return (row?.count as number | undefined) ?? 0;
+  }
+
+  async getOutgoingTotal(from: string): Promise<number> {
+    const row = await this.statements.getOutgoingTotal.get(...bindGetOutgoingTotal(from));
+    return (row?.total as number | undefined) ?? 0;
   }
 }

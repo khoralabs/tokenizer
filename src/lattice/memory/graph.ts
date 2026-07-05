@@ -6,6 +6,7 @@ interface Node {
   id: number;
   token: string;
   hubScore: number;
+  tokenCount: number;
 }
 
 interface Edge {
@@ -38,6 +39,7 @@ export class Graph implements IGraph {
         id: ++this.nodeIdCounter,
         token,
         hubScore: 0,
+        tokenCount: 0,
       };
       this.nodes.set(token, node);
       this.adjacencyList.set(node.id, new Map());
@@ -116,5 +118,36 @@ export class Graph implements IGraph {
 
   getConfidence(pattern: string): number {
     return this.nodes.get(pattern)?.hubScore ?? 0;
+  }
+
+  recordEmission(pattern: string, delta = 1): void {
+    if (delta <= 0) return;
+    this.getOrCreateNode(pattern);
+    const node = this.nodes.get(pattern);
+    if (node) node.tokenCount += delta;
+  }
+
+  getTokenCount(pattern: string): number {
+    return this.nodes.get(pattern)?.tokenCount ?? 0;
+  }
+
+  getTotalEmissions(): number {
+    let total = 0;
+    for (const node of this.nodes.values()) total += node.tokenCount;
+    return total;
+  }
+
+  getVocabSize(): number {
+    return this.nodes.size;
+  }
+
+  getOutgoingTotal(from: string): number {
+    const fromNode = this.nodes.get(from);
+    if (!fromNode) return 0;
+    const adj = this.adjacencyList.get(fromNode.id);
+    if (!adj) return 0;
+    let total = 0;
+    for (const weight of adj.values()) total += weight;
+    return total;
   }
 }

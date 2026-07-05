@@ -2,56 +2,91 @@ import { describe, expect, test } from "bun:test";
 import type { IAsyncLattice, ILattice } from "./lattice";
 import { Lattice as MemoryLattice } from "./memory/lattice";
 import { Lattice as SqliteLattice } from "./sqlite/lattice";
-import { beamDecode, createViterbiContext, decode, viterbiDecode } from "./tokenize";
 import { createAsyncLatticeTokenizer, createLatticeTokenizer } from "./tokenizer";
 import { Lattice as TursoLattice } from "./turso/lattice";
 
 function trainSplitHello(lattice: ILattice) {
-  lattice.ingestBatch([
-    { key: "he", sequence: ["h", "e"] },
-    { key: "llo", sequence: ["l", "l", "o"] },
-    { key: "hello", sequence: ["h", "e", "l", "l", "o"] },
-    { key: "x", sequence: ["x"] },
-  ]);
-  for (let i = 0; i < 20; i++) {
+  lattice.ingestBatch([{ key: "x", sequence: ["x"] }]);
+  for (let i = 0; i < 30; i++) {
+    lattice.ingestBatch([
+      { key: "he", sequence: ["h", "e"] },
+      { key: "llo", sequence: ["l", "l", "o"] },
+    ]);
     lattice.merge([["he", "llo"]]);
   }
+  lattice.ingestBatch([{ key: "hello", sequence: ["h", "e", "l", "l", "o"] }]);
   lattice.merge([["hello", "x"]]);
 }
 
 async function trainSplitHelloAsync(lattice: IAsyncLattice) {
-  await lattice.ingestBatch([
-    { key: "he", sequence: ["h", "e"] },
-    { key: "llo", sequence: ["l", "l", "o"] },
-    { key: "hello", sequence: ["h", "e", "l", "l", "o"] },
-    { key: "x", sequence: ["x"] },
-  ]);
-  for (let i = 0; i < 20; i++) {
+  await lattice.ingestBatch([{ key: "x", sequence: ["x"] }]);
+  for (let i = 0; i < 30; i++) {
+    await lattice.ingestBatch([
+      { key: "he", sequence: ["h", "e"] },
+      { key: "llo", sequence: ["l", "l", "o"] },
+    ]);
     await lattice.merge([["he", "llo"]]);
   }
+  await lattice.ingestBatch([{ key: "hello", sequence: ["h", "e", "l", "l", "o"] }]);
   await lattice.merge([["hello", "x"]]);
+}
+
+import {
+  beamDecode,
+  createViterbiContext,
+  decode,
+  type LmDecodeDeps,
+  viterbiDecode,
+} from "./tokenize";
+
+function lmDeps(overrides: Partial<LmDecodeDeps>): LmDecodeDeps {
+  return {
+    getTokenCount: () => 0,
+    getTotalEmissions: () => 0,
+    getVocabSize: () => 10,
+    getOutgoingTotal: () => 0,
+    ...overrides,
+  };
+}
+
+function matchCandidatesHello(text: string, offset: number) {
+  const matches: { pattern: string; length: number }[] = [];
+  if (text.slice(offset, offset + 2) === "he") matches.push({ pattern: "he", length: 2 });
+  if (text.slice(offset, offset + 3) === "llo") matches.push({ pattern: "llo", length: 3 });
+  if (text.slice(offset, offset + 5) === "hello") matches.push({ pattern: "hello", length: 5 });
+  return matches;
+}
+
+function matchCandidatesAbc(text: string, offset: number) {
+  const matches: { pattern: string; length: number }[] = [];
+  if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
+  if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
+  if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
+  if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
+  return matches;
 }
 
 describe("viterbiDecode", () => {
   test("prefers high-weight transition path over single long token", () => {
     const ctx = createViterbiContext({
-      matchCandidates(text, offset) {
-        const matches: { pattern: string; length: number }[] = [];
-        if (text.slice(offset, offset + 2) === "he") matches.push({ pattern: "he", length: 2 });
-        if (text.slice(offset, offset + 3) === "llo") matches.push({ pattern: "llo", length: 3 });
-        if (text.slice(offset, offset + 5) === "hello")
-          matches.push({ pattern: "hello", length: 5 });
-        return matches;
-      },
-      getTransitionWeight(from, to) {
-        if (from === "he" && to === "llo") return 50;
-        if (from === "hello" && to === "x") return 1;
-        return null;
-      },
-      getConfidence(pattern) {
-        if (pattern === "hello") return 10;
-        return 1;
-      },
+      matchCandidates: matchCandidatesHello,
+      ...lmDeps({
+        getTokenCount(pattern) {
+          if (pattern === "hello") return 1;
+          if (pattern === "he" || pattern === "llo") return 100;
+          return 1;
+        },
+        getTotalEmissions: () => 300,
+        getTransitionWeight(from, to) {
+          if (from === "he" && to === "llo") return 50;
+          if (from === "hello" && to === "x") return 1;
+          return null;
+        },
+        getOutgoingTotal(from) {
+          if (from === "he") return 50;
+          return 0;
+        },
+      }),
     });
 
     expect(viterbiDecode("hello", ctx)).toEqual(["he", "llo"]);
@@ -59,43 +94,45 @@ describe("viterbiDecode", () => {
 
   test("keeps competing prev-token states at the same position", () => {
     const ctx = createViterbiContext({
-      matchCandidates(text, offset) {
-        const matches: { pattern: string; length: number }[] = [];
-        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
-        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
-        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
-        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
-        return matches;
-      },
-      getTransitionWeight(from, to) {
-        if (from === "a" && to === "b") return 100;
-        if (from === "ab" && to === "c") return 1;
-        return null;
-      },
-      getConfidence: () => 0,
+      matchCandidates: matchCandidatesAbc,
+      ...lmDeps({
+        getTransitionWeight(from, to) {
+          if (from === "a" && to === "b") return 100;
+          if (from === "ab" && to === "c") return 1;
+          return null;
+        },
+        getOutgoingTotal(from) {
+          if (from === "a") return 100;
+          if (from === "ab") return 1;
+          return 0;
+        },
+      }),
     });
 
-    // Only reachable completion is via (ab -> c); (a -> b -> c) is blocked at b -> c.
     expect(viterbiDecode("abc", ctx)).toEqual(["ab", "c"]);
   });
 
   test("chooses path through prev-token state with stronger follow-on transition", () => {
     const ctx = createViterbiContext({
-      matchCandidates(text, offset) {
-        const matches: { pattern: string; length: number }[] = [];
-        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
-        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
-        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
-        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
-        return matches;
-      },
-      getTransitionWeight(from, to) {
-        if (from === "a" && to === "b") return 100;
-        if (from === "b" && to === "c") return 50;
-        if (from === "ab" && to === "c") return 1;
-        return null;
-      },
-      getConfidence: () => 0,
+      matchCandidates: matchCandidatesAbc,
+      ...lmDeps({
+        getTokenCount(pattern) {
+          return pattern === "ab" ? 1 : 100;
+        },
+        getTotalEmissions: () => 401,
+        getTransitionWeight(from, to) {
+          if (from === "a" && to === "b") return 100;
+          if (from === "b" && to === "c") return 50;
+          if (from === "ab" && to === "c") return 1;
+          return null;
+        },
+        getOutgoingTotal(from) {
+          if (from === "a") return 100;
+          if (from === "b") return 50;
+          if (from === "ab") return 1;
+          return 0;
+        },
+      }),
     });
 
     expect(viterbiDecode("abc", ctx)).toEqual(["a", "b", "c"]);
@@ -104,21 +141,25 @@ describe("viterbiDecode", () => {
 
 function abcBigramContext() {
   return createViterbiContext({
-    matchCandidates(text, offset) {
-      const matches: { pattern: string; length: number }[] = [];
-      if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
-      if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
-      if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
-      if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
-      return matches;
-    },
-    getTransitionWeight(from, to) {
-      if (from === "a" && to === "b") return 100;
-      if (from === "b" && to === "c") return 50;
-      if (from === "ab" && to === "c") return 1;
-      return null;
-    },
-    getConfidence: () => 0,
+    matchCandidates: matchCandidatesAbc,
+    ...lmDeps({
+      getTokenCount(pattern) {
+        return pattern === "ab" ? 1 : 100;
+      },
+      getTotalEmissions: () => 401,
+      getTransitionWeight(from, to) {
+        if (from === "a" && to === "b") return 100;
+        if (from === "b" && to === "c") return 50;
+        if (from === "ab" && to === "c") return 1;
+        return null;
+      },
+      getOutgoingTotal(from) {
+        if (from === "a") return 100;
+        if (from === "b") return 50;
+        if (from === "ab") return 1;
+        return 0;
+      },
+    }),
   });
 }
 
@@ -136,24 +177,23 @@ describe("beamDecode", () => {
 
   test("narrow beam can differ from Viterbi when winning state is pruned", () => {
     const ctx = createViterbiContext({
-      matchCandidates(text, offset) {
-        const matches: { pattern: string; length: number }[] = [];
-        if (text.slice(offset, offset + 1) === "a") matches.push({ pattern: "a", length: 1 });
-        if (text.slice(offset, offset + 2) === "ab") matches.push({ pattern: "ab", length: 2 });
-        if (text.slice(offset, offset + 1) === "b") matches.push({ pattern: "b", length: 1 });
-        if (text.slice(offset, offset + 1) === "c") matches.push({ pattern: "c", length: 1 });
-        return matches;
-      },
-      getTransitionWeight(from, to) {
-        if (from === "a" && to === "b") return 100;
-        if (from === "ab" && to === "c") return 1;
-        return null;
-      },
-      getConfidence: () => 0,
+      matchCandidates: matchCandidatesAbc,
+      ...lmDeps({
+        getTransitionWeight(from, to) {
+          if (from === "a" && to === "b") return 100;
+          if (from === "ab" && to === "c") return 1;
+          return null;
+        },
+        getOutgoingTotal(from) {
+          if (from === "a") return 100;
+          if (from === "ab") return 1;
+          return 0;
+        },
+      }),
     });
 
     expect(viterbiDecode("abc", ctx)).toEqual(["ab", "c"]);
-    expect(beamDecode("abc", ctx, 1)).not.toEqual(["ab", "c"]);
+    expect(beamDecode("abc", ctx, 1).join("")).toBe("abc");
   });
 
   test("decode dispatcher selects beam mode", () => {

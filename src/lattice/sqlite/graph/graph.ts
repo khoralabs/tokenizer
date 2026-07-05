@@ -5,9 +5,15 @@ import {
   createGraphStatements,
   createGraphTables,
   type GetConfidenceStmt,
+  type GetOutgoingTotalStmt,
+  type GetTokenCountStmt,
+  type GetTotalEmissionsStmt,
   type GetTransitionWeightStmt,
+  type GetVocabSizeStmt,
+  hasTokenCountColumn,
   type InsertEdgeStmt,
   type ListPatternsStmt,
+  type RecordEmissionStmt,
   type SelectTopTokensStmt,
   type SelectTransitionsStmt,
   type UpsertNodeStmt,
@@ -18,6 +24,7 @@ export class Graph implements IGraph {
   private db: Database;
   private scorer: ISqliteHubScorer;
   private nodeIdCache = new Map<string, number>();
+  private tokenCountsEnabled: boolean;
 
   private upsertNode!: UpsertNodeStmt;
   private insertEdge!: InsertEdgeStmt;
@@ -26,16 +33,22 @@ export class Graph implements IGraph {
   private listPatternsStmt!: ListPatternsStmt;
   private getTransitionWeightStmt!: GetTransitionWeightStmt;
   private getConfidenceStmt!: GetConfidenceStmt;
+  private recordEmissionStmt?: RecordEmissionStmt;
+  private getTokenCountStmt?: GetTokenCountStmt;
+  private getTotalEmissionsStmt?: GetTotalEmissionsStmt;
+  private getVocabSizeStmt?: GetVocabSizeStmt;
+  private getOutgoingTotalStmt!: GetOutgoingTotalStmt;
 
-  constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer()) {
+  constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer(), readonly = false) {
     this.db = database;
     this.scorer = scorer;
-    this.initSchema();
+    this.initSchema(readonly);
+    this.tokenCountsEnabled = hasTokenCountColumn(this.db);
     this.prepareStatements();
   }
 
-  private initSchema() {
-    createGraphTables(this.db);
+  private initSchema(readonly: boolean) {
+    createGraphTables(this.db, { readonly });
   }
 
   private prepareStatements() {
@@ -47,7 +60,12 @@ export class Graph implements IGraph {
       listPatterns,
       getTransitionWeight,
       getConfidence,
-    } = createGraphStatements(this.db);
+      recordEmission,
+      getTokenCount,
+      getTotalEmissions,
+      getVocabSize,
+      getOutgoingTotal,
+    } = createGraphStatements(this.db, { tokenCounts: this.tokenCountsEnabled });
 
     this.upsertNode = upsertNode;
     this.insertEdge = insertEdge;
@@ -56,6 +74,13 @@ export class Graph implements IGraph {
     this.listPatternsStmt = listPatterns;
     this.getTransitionWeightStmt = getTransitionWeight;
     this.getConfidenceStmt = getConfidence;
+    this.getOutgoingTotalStmt = getOutgoingTotal;
+    if (this.tokenCountsEnabled) {
+      this.recordEmissionStmt = recordEmission;
+      this.getTokenCountStmt = getTokenCount;
+      this.getTotalEmissionsStmt = getTotalEmissions;
+      this.getVocabSizeStmt = getVocabSize;
+    }
   }
 
   getOrCreateNode(pattern: string): number {
@@ -108,5 +133,34 @@ export class Graph implements IGraph {
   getConfidence(pattern: string): number {
     const row = this.getConfidenceStmt.get(bind({ pattern }));
     return row?.confidence ?? 0;
+  }
+
+  recordEmission(pattern: string, delta = 1): void {
+    if (delta <= 0 || !this.tokenCountsEnabled || !this.recordEmissionStmt) return;
+    this.recordEmissionStmt.run(bind({ pattern, delta }));
+    this.nodeIdCache.delete(pattern);
+  }
+
+  getTokenCount(pattern: string): number {
+    if (!this.tokenCountsEnabled || !this.getTokenCountStmt) return 0;
+    const row = this.getTokenCountStmt.get(bind({ pattern }));
+    return row?.token_count ?? 0;
+  }
+
+  getTotalEmissions(): number {
+    if (!this.tokenCountsEnabled || !this.getTotalEmissionsStmt) return 0;
+    const row = this.getTotalEmissionsStmt.get();
+    return row?.total ?? 0;
+  }
+
+  getVocabSize(): number {
+    if (!this.tokenCountsEnabled || !this.getVocabSizeStmt) return 0;
+    const row = this.getVocabSizeStmt.get();
+    return row?.count ?? 0;
+  }
+
+  getOutgoingTotal(from: string): number {
+    const row = this.getOutgoingTotalStmt.get(bind({ from }));
+    return row?.total ?? 0;
   }
 }

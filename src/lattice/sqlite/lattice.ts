@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
+import { tokenizeWithLm } from "../decode-lm";
+import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
-import { createViterbiContext, decode } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
 import { DegreeScorer, Graph, type ISqliteHubScorer } from "./graph";
 import { Trie } from "./trie";
@@ -43,7 +44,7 @@ export class Lattice implements ILattice {
       this.db.run("PRAGMA wal_autocheckpoint = 100;");
     }
 
-    this.graph = new Graph(this.db, scorer);
+    this.graph = new Graph(this.db, scorer, readonly);
     this.trie = new Trie(this.db);
   }
 
@@ -68,13 +69,7 @@ export class Lattice implements ILattice {
     if (segments.length === 0) return;
 
     const tx = this.db.transaction(() => {
-      for (const segment of segments) {
-        const markovId = this.graph.getOrCreateNode(segment.key);
-        for (const element of segment.sequence) {
-          this.trie.merge(element, markovId);
-        }
-        this.trie.merge(segment.key, markovId);
-      }
+      ingestSegmentBatch(this.graph, this.trie, segments);
     });
     tx();
     this.maybeCheckpoint();
@@ -84,13 +79,7 @@ export class Lattice implements ILattice {
     if (segments.length === 0 && pairs.length === 0) return;
 
     const tx = this.db.transaction(() => {
-      for (const segment of segments) {
-        const markovId = this.graph.getOrCreateNode(segment.key);
-        for (const element of segment.sequence) {
-          this.trie.merge(element, markovId);
-        }
-        this.trie.merge(segment.key, markovId);
-      }
+      ingestSegmentBatch(this.graph, this.trie, segments);
       for (const [from, to, delta] of pairs) {
         this.graph.merge(from, to, delta);
       }
@@ -100,15 +89,12 @@ export class Lattice implements ILattice {
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    if (!this.readonly) {
-      this.graph.getTopTokens(1);
-    }
-    const ctx = createViterbiContext({
-      matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
-      getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
-      getConfidence: (pattern) => this.graph.getConfidence(pattern),
-    });
-    return decode(text, ctx, options);
+    return tokenizeWithLm(
+      text,
+      this.graph,
+      (input, offset) => this.trie.matchCandidates(input, offset),
+      options,
+    );
   }
 
   vocabulary(): string[] {

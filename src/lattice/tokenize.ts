@@ -1,3 +1,5 @@
+import { bigramLogProb, DEFAULT_LM_SMOOTHING, type LmStats, unigramLogProb } from "./lm";
+
 export type MatchCandidate = { pattern: string; length: number };
 
 export type LatticeDecodeOptions = { mode?: "viterbi" } | { mode: "beam"; beamWidth: number };
@@ -23,8 +25,6 @@ type Layer = {
 };
 
 type DecodeRunOptions = { beamWidth?: number };
-
-const FALLBACK_EMISSION = 0;
 
 function createLayer(): Layer {
   return { scores: new Map(), back: new Map() };
@@ -95,7 +95,6 @@ function extendLayer(
   prevToken: string | null,
   baseScore: number,
   candidates: MatchCandidate[],
-  fromTrie: boolean,
   layers: Layer[],
   ctx: Pick<ViterbiContext, "transitionWeight" | "emissionScore">,
   beamWidth?: number,
@@ -104,7 +103,7 @@ function extendLayer(
     const j = i + length;
     if (j > n) continue;
 
-    const emission = fromTrie ? ctx.emissionScore(pattern) : FALLBACK_EMISSION;
+    const emission = ctx.emissionScore(pattern);
     const transition = ctx.transitionWeight(prevToken, pattern);
     if (transition === Number.NEGATIVE_INFINITY) continue;
 
@@ -122,7 +121,6 @@ async function extendLayerAsync(
   prevToken: string | null,
   baseScore: number,
   candidates: MatchCandidate[],
-  fromTrie: boolean,
   layers: Layer[],
   ctx: Pick<AsyncViterbiContext, "transitionWeight" | "emissionScore">,
   beamWidth?: number,
@@ -131,7 +129,7 @@ async function extendLayerAsync(
     const j = i + length;
     if (j > n) continue;
 
-    const emission = fromTrie ? await ctx.emissionScore(pattern) : FALLBACK_EMISSION;
+    const emission = await ctx.emissionScore(pattern);
     const transition = await ctx.transitionWeight(prevToken, pattern);
     if (transition === Number.NEGATIVE_INFINITY) continue;
 
@@ -160,14 +158,13 @@ function runBigramDecode(text: string, ctx: ViterbiContext, options?: DecodeRunO
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
 
       let candidates = ctx.matchCandidates(text, i);
-      const fromTrie = candidates.length > 0;
-      if (!fromTrie) {
+      if (candidates.length === 0) {
         const char = text[i];
         if (char === undefined) continue;
         candidates = [{ pattern: char, length: 1 }];
       }
 
-      extendLayer(n, i, prevToken, baseScore, candidates, fromTrie, layers, ctx, beamWidth);
+      extendLayer(n, i, prevToken, baseScore, candidates, layers, ctx, beamWidth);
     }
   }
 
@@ -195,24 +192,13 @@ async function runBigramDecodeAsync(
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
 
       let candidates = await ctx.matchCandidates(text, i);
-      const fromTrie = candidates.length > 0;
-      if (!fromTrie) {
+      if (candidates.length === 0) {
         const char = text[i];
         if (char === undefined) continue;
         candidates = [{ pattern: char, length: 1 }];
       }
 
-      await extendLayerAsync(
-        n,
-        i,
-        prevToken,
-        baseScore,
-        candidates,
-        fromTrie,
-        layers,
-        ctx,
-        beamWidth,
-      );
+      await extendLayerAsync(n, i, prevToken, baseScore, candidates, layers, ctx, beamWidth);
     }
   }
 
@@ -264,25 +250,50 @@ export async function beamDecodeAsync(
   return runBigramDecodeAsync(text, ctx, { beamWidth });
 }
 
-export function createViterbiContext(deps: {
-  matchCandidates(text: string, offset: number): MatchCandidate[];
+export type LmDecodeDeps = {
+  getTokenCount(pattern: string): number;
+  getTotalEmissions(): number;
+  getVocabSize(): number;
   getTransitionWeight(from: string, to: string): number | null;
-  getConfidence(pattern: string): number;
-}): ViterbiContext {
+  getOutgoingTotal(from: string): number;
+  smoothing?: number;
+  useBigram?: boolean;
+};
+
+function lmStats(deps: LmDecodeDeps): LmStats {
+  return {
+    totalEmissions: deps.getTotalEmissions(),
+    vocabSize: deps.getVocabSize(),
+    smoothing: deps.smoothing ?? DEFAULT_LM_SMOOTHING,
+  };
+}
+
+export function createViterbiContext(
+  deps: {
+    matchCandidates(text: string, offset: number): MatchCandidate[];
+  } & LmDecodeDeps,
+): ViterbiContext {
   const emissionCache = new Map<string, number>();
+  const outgoingCache = new Map<string, number>();
+  const useBigram = deps.useBigram ?? true;
+  const stats = () => lmStats(deps);
 
   return {
     matchCandidates: deps.matchCandidates,
     transitionWeight(from, to) {
-      if (from === null) return 0;
-      const weight = deps.getTransitionWeight(from, to);
-      if (weight === null || weight <= 0) return Number.NEGATIVE_INFINITY;
-      return Math.log(weight);
+      if (from === null || !useBigram) return 0;
+      const weight = deps.getTransitionWeight(from, to) ?? 0;
+      let fromTotal = outgoingCache.get(from);
+      if (fromTotal === undefined) {
+        fromTotal = deps.getOutgoingTotal(from);
+        outgoingCache.set(from, fromTotal);
+      }
+      return bigramLogProb(weight, fromTotal, stats());
     },
     emissionScore(token) {
       let score = emissionCache.get(token);
       if (score === undefined) {
-        score = Math.log1p(deps.getConfidence(token));
+        score = unigramLogProb(deps.getTokenCount(token), stats());
         emissionCache.set(token, score);
       }
       return score;
@@ -290,25 +301,53 @@ export function createViterbiContext(deps: {
   };
 }
 
-export function createAsyncViterbiContext(deps: {
-  matchCandidates(text: string, offset: number): Promise<MatchCandidate[]>;
-  getTransitionWeight(from: string, to: string): Promise<number | null>;
-  getConfidence(pattern: string): Promise<number>;
-}): AsyncViterbiContext {
+export function createAsyncViterbiContext(
+  deps: {
+    matchCandidates(text: string, offset: number): Promise<MatchCandidate[]>;
+  } & {
+    getTokenCount(pattern: string): Promise<number>;
+    getTotalEmissions(): Promise<number>;
+    getVocabSize(): Promise<number>;
+    getTransitionWeight(from: string, to: string): Promise<number | null>;
+    getOutgoingTotal(from: string): Promise<number>;
+    smoothing?: number;
+    useBigram?: boolean;
+  },
+): AsyncViterbiContext {
   const emissionCache = new Map<string, number>();
+  const outgoingCache = new Map<string, number>();
+  const useBigram = deps.useBigram ?? true;
+  let statsPromise: Promise<LmStats> | null = null;
+
+  const stats = () => {
+    if (!statsPromise) {
+      statsPromise = Promise.all([deps.getTotalEmissions(), deps.getVocabSize()]).then(
+        ([totalEmissions, vocabSize]) => ({
+          totalEmissions,
+          vocabSize,
+          smoothing: deps.smoothing ?? DEFAULT_LM_SMOOTHING,
+        }),
+      );
+    }
+    return statsPromise;
+  };
 
   return {
     matchCandidates: deps.matchCandidates,
     async transitionWeight(from, to) {
-      if (from === null) return 0;
-      const weight = await deps.getTransitionWeight(from, to);
-      if (weight === null || weight <= 0) return Number.NEGATIVE_INFINITY;
-      return Math.log(weight);
+      if (from === null || !useBigram) return 0;
+      const weight = (await deps.getTransitionWeight(from, to)) ?? 0;
+      let fromTotal = outgoingCache.get(from);
+      if (fromTotal === undefined) {
+        fromTotal = await deps.getOutgoingTotal(from);
+        outgoingCache.set(from, fromTotal);
+      }
+      return bigramLogProb(weight, fromTotal, await stats());
     },
     async emissionScore(token) {
       let score = emissionCache.get(token);
       if (score === undefined) {
-        score = Math.log1p(await deps.getConfidence(token));
+        score = unigramLogProb(await deps.getTokenCount(token), await stats());
         emissionCache.set(token, score);
       }
       return score;
