@@ -21,8 +21,9 @@ const DEFAULT_BACKEND = "sqlite";
 
 function printUsage(): void {
   console.log(`Usage: tokenizer ingest -f <glob> [options]
+       tokenizer tokenize [options]   (see: bun run tokenize --help)
 
-Options:
+Ingest options:
   -f, --files <glob>     Glob pattern of files to ingest (required)
   --db <path>            Database path (default: ${DEFAULT_DB})
   --backend <name>       Storage backend: sqlite or turso (default: ${DEFAULT_BACKEND})

@@ -33,10 +33,12 @@
     "test": "bun test",
     "prepare": "husky",
     "context": "bun run scripts/context.ts",
-    "tokenizer": "bun scripts/tokenizer.ts"
+    "tokenizer": "bun scripts/tokenizer.ts",
+    "tokenize": "bun scripts/tokenize.ts"
   },
   "bin": {
-    "tokenizer": "./scripts/tokenizer.ts"
+    "tokenizer": "./scripts/tokenizer.ts",
+    "tokenize": "./scripts/tokenize.ts"
   },
   "dependencies": {
     "@biomejs/biome": "^2.4.16",

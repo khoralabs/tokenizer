@@ -11,6 +11,7 @@ export interface SqliteLatticeConfig {
   filename?: string;
   scorer?: ISqliteHubScorer;
   bulkIngest?: boolean;
+  readonly?: boolean;
 }
 
 /**
@@ -21,6 +22,7 @@ export class Lattice implements ILattice {
   private trie: Trie;
   private graph: Graph;
   private bulkIngest: boolean;
+  private readonly: boolean;
   private writesSinceCheckpoint = 0;
 
   constructor(config: SqliteLatticeConfig | string = {}) {
@@ -28,14 +30,18 @@ export class Lattice implements ILattice {
       filename = ":memory:",
       scorer = new DegreeScorer(),
       bulkIngest = false,
+      readonly = false,
     } = typeof config === "string" ? { filename: config } : config;
 
     this.bulkIngest = bulkIngest;
-    this.db = new Database(filename, { create: true });
-    this.db.run("PRAGMA journal_mode = WAL;");
-    this.db.run("PRAGMA synchronous = OFF;");
-    this.db.run("PRAGMA temp_store = MEMORY;");
-    this.db.run("PRAGMA wal_autocheckpoint = 100;");
+    this.readonly = readonly;
+    this.db = new Database(filename, readonly ? { readonly: true } : { create: true });
+    if (!readonly) {
+      this.db.run("PRAGMA journal_mode = WAL;");
+      this.db.run("PRAGMA synchronous = OFF;");
+      this.db.run("PRAGMA temp_store = MEMORY;");
+      this.db.run("PRAGMA wal_autocheckpoint = 100;");
+    }
 
     this.graph = new Graph(this.db, scorer);
     this.trie = new Trie(this.db);
@@ -94,7 +100,9 @@ export class Lattice implements ILattice {
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    this.graph.getTopTokens(1);
+    if (!this.readonly) {
+      this.graph.getTopTokens(1);
+    }
     const ctx = createViterbiContext({
       matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
       getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
@@ -146,7 +154,9 @@ export class Lattice implements ILattice {
   }
 
   close(): void {
-    this.db.run("PRAGMA wal_checkpoint(TRUNCATE);");
+    if (!this.readonly) {
+      this.db.run("PRAGMA wal_checkpoint(TRUNCATE);");
+    }
     this.db.close();
   }
 
