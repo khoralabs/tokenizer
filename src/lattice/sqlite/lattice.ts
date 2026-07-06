@@ -1,5 +1,9 @@
 import { Database } from "bun:sqlite";
-import { tokenizeWithLm } from "../decode-lm";
+import {
+  type DecodeSnapshot,
+  loadSqliteDecodeSnapshot,
+  tokenizeWithSnapshot,
+} from "../decode-snapshot";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
@@ -25,6 +29,7 @@ export class Lattice implements ILattice {
   private bulkIngest: boolean;
   private readonly: boolean;
   private writesSinceCheckpoint = 0;
+  private decodeSnapshot: DecodeSnapshot | null = null;
 
   constructor(config: SqliteLatticeConfig | string = {}) {
     const {
@@ -58,6 +63,7 @@ export class Lattice implements ILattice {
       }
     });
     tx();
+    this.invalidateDecodeSnapshot();
     this.maybeCheckpoint();
   }
 
@@ -72,6 +78,7 @@ export class Lattice implements ILattice {
       ingestSegmentBatch(this.graph, this.trie, segments);
     });
     tx();
+    this.invalidateDecodeSnapshot();
     this.maybeCheckpoint();
   }
 
@@ -85,16 +92,24 @@ export class Lattice implements ILattice {
       }
     });
     tx();
+    this.invalidateDecodeSnapshot();
     this.maybeCheckpoint();
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    return tokenizeWithLm(
-      text,
-      this.graph,
-      (input, offset) => this.trie.matchCandidates(input, offset),
-      options,
-    );
+    return tokenizeWithSnapshot(text, this.getDecodeSnapshot(), options);
+  }
+
+  /** Drop cached in-memory decode tables (call after ingest if re-tokenizing same instance). */
+  invalidateDecodeSnapshot(): void {
+    this.decodeSnapshot = null;
+  }
+
+  private getDecodeSnapshot(): DecodeSnapshot {
+    if (!this.decodeSnapshot) {
+      this.decodeSnapshot = loadSqliteDecodeSnapshot(this.db);
+    }
+    return this.decodeSnapshot;
   }
 
   vocabulary(): string[] {

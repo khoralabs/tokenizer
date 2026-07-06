@@ -258,6 +258,9 @@ export type LmDecodeDeps = {
   getOutgoingTotal(from: string): number;
   smoothing?: number;
   useBigram?: boolean;
+  /** Precomputed scores; bypasses DB lookups when provided. */
+  emissionLogProb?: (token: string) => number;
+  transitionLogProb?: (from: string | null, to: string) => number;
 };
 
 function lmStats(deps: LmDecodeDeps): LmStats {
@@ -277,11 +280,14 @@ export function createViterbiContext(
   const outgoingCache = new Map<string, number>();
   const useBigram = deps.useBigram ?? true;
   const stats = () => lmStats(deps);
+  const emissionFn = deps.emissionLogProb;
+  const transitionFn = deps.transitionLogProb;
 
   return {
     matchCandidates: deps.matchCandidates,
     transitionWeight(from, to) {
       if (from === null || !useBigram) return 0;
+      if (transitionFn) return transitionFn(from, to);
       const weight = deps.getTransitionWeight(from, to) ?? 0;
       let fromTotal = outgoingCache.get(from);
       if (fromTotal === undefined) {
@@ -291,6 +297,7 @@ export function createViterbiContext(
       return bigramLogProb(weight, fromTotal, stats());
     },
     emissionScore(token) {
+      if (emissionFn) return emissionFn(token);
       let score = emissionCache.get(token);
       if (score === undefined) {
         score = unigramLogProb(deps.getTokenCount(token), stats());
