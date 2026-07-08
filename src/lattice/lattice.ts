@@ -1,3 +1,4 @@
+import type { ICompiledLattice } from "./compiled-lattice";
 import type { LatticeSegment } from "./segment";
 import type { LatticeDecodeOptions } from "./tokenize";
 
@@ -52,6 +53,14 @@ export interface ILattice {
    */
   tokenize(text: string, options?: LatticeDecodeOptions): string[];
 
+  /**
+   * Build an in-memory decode index (Aho-Corasick + LM tables) from persisted state.
+   */
+  compile(): ICompiledLattice;
+
+  /** Drop cached compiled lattice after ingest or merge. */
+  invalidateCompiled(): void;
+
   /** All pattern strings in the graph vocabulary. */
   vocabulary(): string[];
 
@@ -91,6 +100,8 @@ export interface IAsyncLattice {
   ingestBatch(segments: LatticeSegment[]): Promise<void>;
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): Promise<void>;
   tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]>;
+  compile(): Promise<ICompiledLattice>;
+  invalidateCompiled(): void;
   vocabulary(): Promise<string[]>;
   pipe(
     source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,

@@ -97,6 +97,17 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     WHERE e.from_id = (SELECT id FROM nodes WHERE token = ?);
   `);
 
+  const selectAllLmEdges = await database.prepare(`
+    SELECT f.token AS from_token, t.token AS to_token, e.weight
+    FROM edges e
+    JOIN nodes f ON f.id = e.from_id
+    JOIN nodes t ON t.id = e.to_id
+  `);
+
+  const selectAllTokenCounts = await database.prepare(`
+    SELECT token, token_count FROM nodes
+  `);
+
   return {
     upsertNode,
     insertEdge,
@@ -110,6 +121,8 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     getTotalEmissions,
     getVocabSize,
     getOutgoingTotal,
+    selectAllLmEdges,
+    selectAllTokenCounts,
   };
 };
 

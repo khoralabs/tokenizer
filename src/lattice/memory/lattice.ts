@@ -1,27 +1,28 @@
-import { tokenizeWithLm } from "../decode-lm";
+import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
+import { PatternVocabulary } from "../pattern-vocabulary";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { Graph } from "./graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
-import { Trie } from "./trie";
 
 export interface MemoryLatticeConfig {
   scorer?: IMemoryHubScorer;
 }
 
 /**
- * In-memory implementation of a Lattice that composes a Trie and a Graph.
+ * In-memory lattice: graph transitions + Aho-Corasick vocabulary.
  */
 export class Lattice implements ILattice {
   private graph: Graph;
-  private trie: Trie;
+  private patterns: PatternVocabulary;
+  private compiled: ICompiledLattice | null = null;
 
   constructor(config: MemoryLatticeConfig = {}) {
     const { scorer = new DegreeScorer() } = config;
     this.graph = new Graph(scorer);
-    this.trie = new Trie();
+    this.patterns = new PatternVocabulary();
   }
 
   merge(pairs: [string, string, number?][]): void {
@@ -29,6 +30,7 @@ export class Lattice implements ILattice {
       if (from.length === 0 || to.length === 0) throw new Error("Cannot merge empty pattern");
       this.graph.merge(from, to, delta);
     }
+    this.invalidateCompiled();
   }
 
   ingest(segment: LatticeSegment): void {
@@ -36,21 +38,21 @@ export class Lattice implements ILattice {
   }
 
   ingestBatch(segments: LatticeSegment[]): void {
-    ingestSegmentBatch(this.graph, this.trie, segments);
+    ingestSegmentBatch(this.graph, this.patterns, segments);
+    this.invalidateCompiled();
   }
 
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void {
-    ingestSegmentBatch(this.graph, this.trie, segments);
+    ingestSegmentBatch(this.graph, this.patterns, segments);
     this.merge(pairs);
   }
 
+  compile(): ICompiledLattice {
+    return compilePatterns(this.patterns.listTerminalPatterns(), this.graph.buildLmTables());
+  }
+
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    return tokenizeWithLm(
-      text,
-      this.graph,
-      (input, offset) => this.trie.matchCandidates(input, offset),
-      options,
-    );
+    return tokenizeCompiled(text, this.getCompiled(), options);
   }
 
   vocabulary(): string[] {
@@ -62,7 +64,7 @@ export class Lattice implements ILattice {
   }
 
   nextCharacters(prefix: string): string[] {
-    return this.trie.nextCharacters(prefix);
+    return this.patterns.nextCharacters(prefix);
   }
 
   getTopTokens(limit = 10): { pattern: string; confidence: number }[] {
@@ -97,5 +99,17 @@ export class Lattice implements ILattice {
 
   close(): void {
     // No-op for in-memory implementation
+  }
+
+  invalidateCompiled(): void {
+    this.compiled = null;
+    this.patterns.invalidate();
+  }
+
+  private getCompiled(): ICompiledLattice {
+    if (!this.compiled) {
+      this.compiled = this.compile();
+    }
+    return this.compiled;
   }
 }

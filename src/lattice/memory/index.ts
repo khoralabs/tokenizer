@@ -1,5 +1,6 @@
 export type { IGraph } from "../graph";
 export type { ILattice } from "../lattice";
+export { PatternVocabulary } from "../pattern-vocabulary";
 export type { IHubScorer } from "../scorer";
 export * from "../segment";
 export * from "../tokenize";
@@ -8,4 +9,3 @@ export type { ITrie } from "../trie";
 export * from "./graph";
 export * from "./lattice";
 export * from "./scorers";
-export * from "./trie";

@@ -1,3 +1,4 @@
+import { buildLmTables, type LmTables } from "../../compiled-lattice";
 import type { GraphEdgeInsert, GraphNodeInsert } from "../../graph.model";
 import type { TursoDatabase } from "../db";
 import {
@@ -124,5 +125,22 @@ export class Graph {
   async getOutgoingTotal(from: string): Promise<number> {
     const row = await this.statements.getOutgoingTotal.get(...bindGetOutgoingTotal(from));
     return (row?.total as number | undefined) ?? 0;
+  }
+
+  async buildLmTables(): Promise<LmTables> {
+    const tokenCounts = new Map<string, number>();
+    const countRows = await this.statements.selectAllTokenCounts.all();
+    for (const row of countRows) {
+      const token = row.token as string;
+      const count = row.token_count as number;
+      if (count > 0) tokenCounts.set(token, count);
+    }
+    const edgeRows = await this.statements.selectAllLmEdges.all();
+    const edges = edgeRows.map((row) => ({
+      from: row.from_token as string,
+      to: row.to_token as string,
+      weight: row.weight as number,
+    }));
+    return buildLmTables(tokenCounts, edges);
   }
 }

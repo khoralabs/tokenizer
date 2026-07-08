@@ -94,4 +94,9 @@ export class Trie {
 
     return matches;
   }
+
+  async listTerminalPatterns(): Promise<string[]> {
+    const rows = await this.statements.listTerminalPatterns.all();
+    return rows.map((row) => row.pattern as string);
+  }
 }

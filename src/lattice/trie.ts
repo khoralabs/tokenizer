@@ -23,4 +23,7 @@ export interface ITrie {
    * Returns all vocabulary patterns matching at offset in text.
    */
   matchCandidates(text: string, offset?: number): MatchCandidate[];
+
+  /** Terminal vocabulary patterns for lattice compilation. */
+  listTerminalPatterns(): string[];
 }

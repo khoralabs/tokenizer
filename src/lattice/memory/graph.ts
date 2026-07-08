@@ -1,3 +1,4 @@
+import { buildLmTables, type LmTables } from "../compiled-lattice";
 import type { IGraph } from "../graph";
 import { DegreeScorer, type IMemoryHubScorer } from "./scorers";
 
@@ -149,5 +150,21 @@ export class Graph implements IGraph {
     let total = 0;
     for (const weight of adj.values()) total += weight;
     return total;
+  }
+
+  buildLmTables(): LmTables {
+    const tokenCounts = new Map<string, number>();
+    for (const node of this.nodes.values()) {
+      if (node.tokenCount > 0) tokenCounts.set(node.token, node.tokenCount);
+    }
+    const idToToken = new Map<number, string>();
+    for (const node of this.nodes.values()) idToToken.set(node.id, node.token);
+    const edges = [];
+    for (const { from_id, to_id, weight } of this.edges.values()) {
+      const from = idToToken.get(from_id);
+      const to = idToToken.get(to_id);
+      if (from && to) edges.push({ from, to, weight });
+    }
+    return buildLmTables(tokenCounts, edges);
   }
 }

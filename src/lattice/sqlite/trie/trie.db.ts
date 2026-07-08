@@ -11,6 +11,7 @@ export type SelectTrieChildrenStmt = Statement<
   Pick<TrieNode, "char">,
   [BunBind<Pick<TrieNode, "parent_key">>]
 >;
+export type ListTerminalPatternsStmt = Statement<{ pattern: string }, []>;
 
 export const createTrieTable = (database: Database) =>
   database.run(`
@@ -50,10 +51,17 @@ export const createTrieStatements = (database: Database) => {
     SELECT char FROM trie_nodes WHERE parent_key = $parent_key
   `);
 
+  const listTerminalPatterns: ListTerminalPatternsStmt = database.query(`
+    SELECT DISTINCT pattern AS pattern
+    FROM trie_nodes
+    WHERE terminal = 1 AND pattern IS NOT NULL
+  `);
+
   return {
     upsertTrieNode,
     selectTrieNode,
     selectTrieChildren,
+    listTerminalPatterns,
   };
 };
 

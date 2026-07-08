@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { buildLmTables, type LmTables } from "../../compiled-lattice";
 import type { IGraph } from "../../graph";
 import { bind } from "../bind";
 import {
@@ -14,6 +15,8 @@ import {
   type InsertEdgeStmt,
   type ListPatternsStmt,
   type RecordEmissionStmt,
+  type SelectAllLmEdgesStmt,
+  type SelectAllTokenCountsStmt,
   type SelectTopTokensStmt,
   type SelectTransitionsStmt,
   type UpsertNodeStmt,
@@ -38,6 +41,8 @@ export class Graph implements IGraph {
   private getTotalEmissionsStmt?: GetTotalEmissionsStmt;
   private getVocabSizeStmt?: GetVocabSizeStmt;
   private getOutgoingTotalStmt!: GetOutgoingTotalStmt;
+  private selectAllLmEdges!: SelectAllLmEdgesStmt;
+  private selectAllTokenCounts?: SelectAllTokenCountsStmt;
 
   constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer(), readonly = false) {
     this.db = database;
@@ -65,6 +70,8 @@ export class Graph implements IGraph {
       getTotalEmissions,
       getVocabSize,
       getOutgoingTotal,
+      selectAllTokenCounts,
+      selectAllLmEdges,
     } = createGraphStatements(this.db, { tokenCounts: this.tokenCountsEnabled });
 
     this.upsertNode = upsertNode;
@@ -75,11 +82,13 @@ export class Graph implements IGraph {
     this.getTransitionWeightStmt = getTransitionWeight;
     this.getConfidenceStmt = getConfidence;
     this.getOutgoingTotalStmt = getOutgoingTotal;
+    this.selectAllLmEdges = selectAllLmEdges;
     if (this.tokenCountsEnabled) {
       this.recordEmissionStmt = recordEmission;
       this.getTokenCountStmt = getTokenCount;
       this.getTotalEmissionsStmt = getTotalEmissions;
       this.getVocabSizeStmt = getVocabSize;
+      this.selectAllTokenCounts = selectAllTokenCounts;
     }
   }
 
@@ -162,5 +171,20 @@ export class Graph implements IGraph {
   getOutgoingTotal(from: string): number {
     const row = this.getOutgoingTotalStmt.get(bind({ from }));
     return row?.total ?? 0;
+  }
+
+  buildLmTables(): LmTables {
+    const tokenCounts = new Map<string, number>();
+    if (this.selectAllTokenCounts) {
+      for (const row of this.selectAllTokenCounts.all()) {
+        if (row.token_count > 0) tokenCounts.set(row.token, row.token_count);
+      }
+    }
+    const edges = this.selectAllLmEdges.all().map((row) => ({
+      from: row.from_token,
+      to: row.to_token,
+      weight: row.weight,
+    }));
+    return buildLmTables(tokenCounts, edges);
   }
 }

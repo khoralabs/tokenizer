@@ -4,6 +4,7 @@ import { bind } from "../bind";
 import {
   createTrieStatements,
   createTrieTable,
+  type ListTerminalPatternsStmt,
   parentKey,
   type SelectTrieChildrenStmt,
   type SelectTrieNodeStmt,
@@ -16,6 +17,7 @@ export class Trie implements ITrie {
   private upsertTrieNode!: UpsertTrieNodeStmt;
   private selectTrieNode!: SelectTrieNodeStmt;
   private selectTrieChildren!: SelectTrieChildrenStmt;
+  private listTerminalPatternsStmt!: ListTerminalPatternsStmt;
 
   constructor(database: Database) {
     this.db = database;
@@ -28,11 +30,13 @@ export class Trie implements ITrie {
   }
 
   private prepareStatements() {
-    const { upsertTrieNode, selectTrieNode, selectTrieChildren } = createTrieStatements(this.db);
+    const { upsertTrieNode, selectTrieNode, selectTrieChildren, listTerminalPatterns } =
+      createTrieStatements(this.db);
 
     this.upsertTrieNode = upsertTrieNode;
     this.selectTrieNode = selectTrieNode;
     this.selectTrieChildren = selectTrieChildren;
+    this.listTerminalPatternsStmt = listTerminalPatterns;
   }
 
   merge(pattern: string, markov_id: number): number {
@@ -101,5 +105,9 @@ export class Trie implements ITrie {
     }
 
     return matches;
+  }
+
+  listTerminalPatterns(): string[] {
+    return this.listTerminalPatternsStmt.all().map((row) => row.pattern);
   }
 }

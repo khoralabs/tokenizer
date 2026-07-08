@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Lattice } from "./sqlite/lattice";
 
-describe("decode snapshot", () => {
-  test("tokenize is stable across snapshot reload", () => {
+describe("compiled lattice", () => {
+  test("tokenize is stable across recompile", () => {
     const lattice = new Lattice();
     lattice.ingestBatch([
       { key: "he", sequence: ["h", "e"] },
@@ -12,7 +12,7 @@ describe("decode snapshot", () => {
 
     const text = "hello";
     const first = lattice.tokenize(text);
-    lattice.invalidateDecodeSnapshot();
+    lattice.invalidateCompiled();
     const second = lattice.tokenize(text);
 
     expect(first).toEqual(["he", "llo"]);

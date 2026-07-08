@@ -1,8 +1,8 @@
+import { compilePatterns, type ICompiledLattice, tokenizeCompiledAsync } from "../compiled-lattice";
 import { ingestSegmentBatchAsync } from "../ingest-segment";
 import type { IAsyncLattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
-import { createAsyncViterbiContext, decodeAsync } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
 import { checkpointWal, connectTurso, type TursoDatabase } from "./db";
 import { DegreeScorer, Graph, type ITursoHubScorer } from "./graph";
@@ -23,6 +23,7 @@ export class Lattice implements IAsyncLattice {
   private graph: Graph;
   private bulkIngest: boolean;
   private writesSinceCheckpoint = 0;
+  private compiledLattice: ICompiledLattice | null = null;
 
   private constructor(db: TursoDatabase, graph: Graph, trie: Trie, bulkIngest: boolean) {
     this.db = db;
@@ -54,6 +55,7 @@ export class Lattice implements IAsyncLattice {
       }
     });
     await tx();
+    this.invalidateCompiled();
     await this.maybeCheckpoint();
   }
 
@@ -68,6 +70,7 @@ export class Lattice implements IAsyncLattice {
       await ingestSegmentBatchAsync(this.graph, this.trie, segments);
     });
     await tx();
+    this.invalidateCompiled();
     await this.maybeCheckpoint();
   }
 
@@ -84,7 +87,31 @@ export class Lattice implements IAsyncLattice {
       }
     });
     await tx();
+    this.invalidateCompiled();
     await this.maybeCheckpoint();
+  }
+
+  async compile(): Promise<ICompiledLattice> {
+    const [patterns, lm] = await Promise.all([
+      this.trie.listTerminalPatterns(),
+      this.graph.buildLmTables(),
+    ]);
+    return compilePatterns(patterns, lm);
+  }
+
+  invalidateCompiled(): void {
+    this.compiledLattice = null;
+  }
+
+  async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
+    return tokenizeCompiledAsync(text, await this.getCompiledLattice(), options);
+  }
+
+  private async getCompiledLattice(): Promise<ICompiledLattice> {
+    if (!this.compiledLattice) {
+      this.compiledLattice = await this.compile();
+    }
+    return this.compiledLattice;
   }
 
   private async maybeCheckpoint(): Promise<void> {
@@ -94,18 +121,6 @@ export class Lattice implements IAsyncLattice {
       await checkpointWal(this.db);
       this.writesSinceCheckpoint = 0;
     }
-  }
-
-  async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
-    const ctx = createAsyncViterbiContext({
-      matchCandidates: (input, offset) => this.trie.matchCandidates(input, offset),
-      getTokenCount: (pattern) => this.graph.getTokenCount(pattern),
-      getTotalEmissions: () => this.graph.getTotalEmissions(),
-      getVocabSize: () => this.graph.getVocabSize(),
-      getTransitionWeight: (from, to) => this.graph.getTransitionWeight(from, to),
-      getOutgoingTotal: (from) => this.graph.getOutgoingTotal(from),
-    });
-    return decodeAsync(text, ctx, options);
   }
 
   async vocabulary(): Promise<string[]> {

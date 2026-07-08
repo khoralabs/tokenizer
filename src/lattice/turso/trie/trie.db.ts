@@ -46,10 +46,17 @@ export const createTrieStatements = async (database: TursoDatabase) => {
     SELECT char FROM trie_nodes WHERE parent_key = ?
   `);
 
+  const listTerminalPatterns = await database.prepare(`
+    SELECT DISTINCT pattern AS pattern
+    FROM trie_nodes
+    WHERE terminal = 1 AND pattern IS NOT NULL
+  `);
+
   return {
     upsertTrieNode,
     selectTrieNode,
     selectTrieChildren,
+    listTerminalPatterns,
   };
 };
 

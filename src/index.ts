@@ -1,4 +1,7 @@
+export * from "./lattice/aho-corasick";
+export * from "./lattice/compiled-lattice";
 export * from "./lattice/lattice";
+export * from "./lattice/pattern-vocabulary";
 export * from "./lattice/segment";
 export * from "./lattice/tokenize";
 export * from "./lattice/tokenizer";

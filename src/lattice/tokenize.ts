@@ -319,12 +319,16 @@ export function createAsyncViterbiContext(
     getOutgoingTotal(from: string): Promise<number>;
     smoothing?: number;
     useBigram?: boolean;
+    emissionLogProb?: (token: string) => number | Promise<number>;
+    transitionLogProb?: (from: string | null, to: string) => number | Promise<number>;
   },
 ): AsyncViterbiContext {
   const emissionCache = new Map<string, number>();
   const outgoingCache = new Map<string, number>();
   const useBigram = deps.useBigram ?? true;
   let statsPromise: Promise<LmStats> | null = null;
+  const emissionFn = deps.emissionLogProb;
+  const transitionFn = deps.transitionLogProb;
 
   const stats = () => {
     if (!statsPromise) {
@@ -343,6 +347,7 @@ export function createAsyncViterbiContext(
     matchCandidates: deps.matchCandidates,
     async transitionWeight(from, to) {
       if (from === null || !useBigram) return 0;
+      if (transitionFn) return transitionFn(from, to);
       const weight = (await deps.getTransitionWeight(from, to)) ?? 0;
       let fromTotal = outgoingCache.get(from);
       if (fromTotal === undefined) {
@@ -352,6 +357,7 @@ export function createAsyncViterbiContext(
       return bigramLogProb(weight, fromTotal, await stats());
     },
     async emissionScore(token) {
+      if (emissionFn) return emissionFn(token);
       let score = emissionCache.get(token);
       if (score === undefined) {
         score = unigramLogProb(await deps.getTokenCount(token), await stats());

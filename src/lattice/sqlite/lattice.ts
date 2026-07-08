@@ -1,9 +1,5 @@
 import { Database } from "bun:sqlite";
-import {
-  type DecodeSnapshot,
-  loadSqliteDecodeSnapshot,
-  tokenizeWithSnapshot,
-} from "../decode-snapshot";
+import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
 import type { LatticeSegment } from "../segment";
@@ -29,7 +25,7 @@ export class Lattice implements ILattice {
   private bulkIngest: boolean;
   private readonly: boolean;
   private writesSinceCheckpoint = 0;
-  private decodeSnapshot: DecodeSnapshot | null = null;
+  private compiledLattice: ICompiledLattice | null = null;
 
   constructor(config: SqliteLatticeConfig | string = {}) {
     const {
@@ -63,7 +59,7 @@ export class Lattice implements ILattice {
       }
     });
     tx();
-    this.invalidateDecodeSnapshot();
+    this.invalidateCompiled();
     this.maybeCheckpoint();
   }
 
@@ -78,7 +74,7 @@ export class Lattice implements ILattice {
       ingestSegmentBatch(this.graph, this.trie, segments);
     });
     tx();
-    this.invalidateDecodeSnapshot();
+    this.invalidateCompiled();
     this.maybeCheckpoint();
   }
 
@@ -92,24 +88,37 @@ export class Lattice implements ILattice {
       }
     });
     tx();
-    this.invalidateDecodeSnapshot();
+    this.invalidateCompiled();
     this.maybeCheckpoint();
   }
 
+  compile(): ICompiledLattice {
+    return compilePatterns(this.trie.listTerminalPatterns(), this.graph.buildLmTables());
+  }
+
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
-    return tokenizeWithSnapshot(text, this.getDecodeSnapshot(), options);
+    return tokenizeCompiled(text, this.getCompiledLattice(), options);
   }
 
-  /** Drop cached in-memory decode tables (call after ingest if re-tokenizing same instance). */
+  invalidateCompiled(): void {
+    this.compiledLattice = null;
+  }
+
+  /** @deprecated Use invalidateCompiled */
+  invalidateCompiledLattice(): void {
+    this.invalidateCompiled();
+  }
+
+  /** @deprecated Use invalidateCompiled */
   invalidateDecodeSnapshot(): void {
-    this.decodeSnapshot = null;
+    this.invalidateCompiled();
   }
 
-  private getDecodeSnapshot(): DecodeSnapshot {
-    if (!this.decodeSnapshot) {
-      this.decodeSnapshot = loadSqliteDecodeSnapshot(this.db);
+  private getCompiledLattice(): ICompiledLattice {
+    if (!this.compiledLattice) {
+      this.compiledLattice = this.compile();
     }
-    return this.decodeSnapshot;
+    return this.compiledLattice;
   }
 
   vocabulary(): string[] {

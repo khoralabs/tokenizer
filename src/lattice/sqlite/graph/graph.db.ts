@@ -31,6 +31,11 @@ export type GetTokenCountStmt = Statement<
 export type GetTotalEmissionsStmt = Statement<{ total: number }, []>;
 export type GetVocabSizeStmt = Statement<{ count: number }, []>;
 export type GetOutgoingTotalStmt = Statement<{ total: number }, [BunBind<{ from: string }>]>;
+export type SelectAllTokenCountsStmt = Statement<{ token: string; token_count: number }, []>;
+export type SelectAllLmEdgesStmt = Statement<
+  { from_token: string; to_token: string; weight: number },
+  []
+>;
 
 export const createGraphTables = (database: Database, options?: { readonly?: boolean }) => {
   if (!options?.readonly) {
@@ -134,6 +139,13 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
     WHERE e.from_id = (SELECT id FROM nodes WHERE token = $from);
   `);
 
+  const selectAllLmEdges: SelectAllLmEdgesStmt = database.query(`
+    SELECT f.token AS from_token, t.token AS to_token, e.weight
+    FROM edges e
+    JOIN nodes f ON f.id = e.from_id
+    JOIN nodes t ON t.id = e.to_id
+  `);
+
   if (options?.tokenCounts === false) {
     return {
       upsertNode,
@@ -145,6 +157,7 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
       getTransitionWeight,
       getConfidence,
       getOutgoingTotal,
+      selectAllLmEdges,
     };
   }
 
@@ -166,6 +179,10 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
     SELECT COUNT(*) AS count FROM nodes;
   `);
 
+  const selectAllTokenCounts: SelectAllTokenCountsStmt = database.query(`
+    SELECT token, token_count FROM nodes
+  `);
+
   return {
     upsertNode,
     insertEdge,
@@ -180,5 +197,7 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
     getTotalEmissions,
     getVocabSize,
     getOutgoingTotal,
+    selectAllTokenCounts,
+    selectAllLmEdges,
   };
 };
