@@ -1,12 +1,14 @@
 # tkn
 
-A fast, greedy pattern discovery algorithm for sequential data, based on LZ-style compression heuristics.
+A fast, greedy pattern discovery algorithm for sequential data, based on LZ-style compression heuristics — with an optional lattice-backed decoder that turns discovered patterns into a learned tokenizer.
 
 ## What is tkn?
 
-**tkn is not a tokenizer.** Instead, it focuses on discovering patterns in sequential data through greedy segmentation. By tracking which patterns have been seen before (using an LZ-style inclusion heuristic), tkn naturally segments data at boundaries where patterns become novel.
+**tkn is not a traditional trained tokenizer.** It discovers patterns in sequential data through greedy segmentation. By tracking which patterns have been seen before (using an LZ-style inclusion heuristic), tkn naturally segments data at boundaries where patterns become novel.
 
-The algorithm processes input one item at a time, growing sequences as long as they remain "known" and emitting them when they become "unknown." Over time, the emission frequencies and co-occurrence patterns encode the structure of your data, which can then be used for tasks like tokenization, compression, or analysis.
+The algorithm processes input one item at a time, growing sequences as long as they remain "known" and emitting them when they become "unknown." Over time, emission frequencies and co-occurrence patterns encode the structure of your data.
+
+When you need to **segment new text** using what was learned, tkn provides a **lattice**: a graph of token transitions plus a vocabulary of patterns. Decoding uses a unigram + bigram language model with Viterbi (or beam) search — not longest-prefix matching.
 
 ## Goals
 
@@ -14,6 +16,7 @@ The algorithm processes input one item at a time, growing sequences as long as t
 - **No training required**: Discovers patterns online as data arrives
 - **Flexible**: Works with any sequential data (text, events, tokens, etc.)
 - **Composable**: Gate-based architecture allows custom heuristics
+- **Learned tokenization**: Optional lattice stores patterns and transitions for MDL-style decoding
 
 ## When to use tkn
 
@@ -23,13 +26,13 @@ The algorithm processes input one item at a time, growing sequences as long as t
 - Building adaptive segmentation systems
 - Analyzing data structure through emission frequencies
 - Online/streaming pattern discovery
-- Building tokenizers or compression schemes
+- Building tokenizers or compression schemes from observed structure
 
 ❌ **Not for:**
 
 - Optimal segmentation (tkn is greedy, not optimal)
-- Direct replacement for trained tokenizers
-- Fixed vocabulary requirements
+- Direct replacement for large-scale pretrained tokenizers (BPE, SentencePiece, etc.)
+- Fixed vocabulary requirements without ingestion
 
 ## Installation
 
@@ -37,25 +40,171 @@ The algorithm processes input one item at a time, growing sequences as long as t
 bun add @khoralabs/tkn
 ```
 
+Package entry points:
+
+| Import | Use |
+|--------|-----|
+| `@khoralabs/tkn` | Sequencer, pipeline, lattice interfaces, decode utilities |
+| `@khoralabs/tkn/memory` | In-memory lattice (no persistence) |
+| `@khoralabs/tkn/bun-sqlite` | Bun SQLite lattice |
+| `@khoralabs/tkn/turso` | Turso/libSQL lattice (async) |
+
 ## Quick Start
+
+### Pattern discovery (sequencer only)
 
 ```typescript
 import { createLZSequencer } from "@khoralabs/tkn";
 
-// Create a sequencer with default settings
 const sequencer = createLZSequencer();
 
-// Process input
 const text = "hello world hello world";
 for (const char of text) {
   sequencer.push(char);
 }
-sequencer.flush(); // Emit remaining buffer
+sequencer.flush();
 
-// Read discovered patterns
 for await (const { sequence, key } of sequencer.read()) {
   console.log("Pattern:", sequence, "Key:", key);
 }
+```
+
+### Lattice tokenization (discover + decode)
+
+```typescript
+import { createLatticeTokenizer, Lattice } from "@khoralabs/tkn/memory";
+
+const lattice = new Lattice();
+const tokenizer = createLatticeTokenizer(lattice);
+
+await tokenizer.feed("hello world ".repeat(100));
+
+console.log(tokenizer.tokenize("hello")); // e.g. ["he", "llo"] — Viterbi over learned LM
+console.log(tokenizer.vocabulary());
+console.log(tokenizer.getTopTokens(5));
+```
+
+### CLI
+
+Ingest a corpus into a persisted lattice, then decode new text:
+
+```bash
+# Ingest files (SQLite by default → .tkn/lattice.db)
+bun run tokenizer ingest -f "corpus/**/*.txt"
+
+# Decode text against the trained lattice
+bun run tokenize --text "hello world"
+bun run tokenize -f input.txt --decoder beam --beam-width 32
+```
+
+Use `--backend turso` on both commands for the Turso backend.
+
+## Architecture
+
+```
+┌─────────────┐     segments      ┌──────────────────────────────────┐
+│ LZ Sequencer│ ────────────────► │ Lattice (persisted)              │
+│ + Pipeline  │   key + sequence  │  • Graph: transitions + counts   │
+└─────────────┘                   │  • Trie/PatternVocab: vocabulary │
+                                  └──────────────┬───────────────────┘
+                                                 │ compile()
+                                                 ▼
+                                  ┌──────────────────────────────────┐
+                                  │ ICompiledLattice (in-process)    │
+                                  │  • Aho-Corasick pattern scan     │
+                                  │  • Precomputed LM log-probs      │
+                                  └──────────────┬───────────────────┘
+                                                 │ tokenize()
+                                                 ▼
+                                  ┌──────────────────────────────────┐
+                                  │ Viterbi / beam decode            │
+                                  └──────────────────────────────────┘
+```
+
+**Ingest** writes to durable storage (or in-memory maps). **Compile** builds a fast decode index from that state. **Tokenize** scans text once with Aho-Corasick, then runs bigram Viterbi over precomputed scores.
+
+Each backend owns its own `compile()` logic; decoding always works against the abstract `ICompiledLattice`.
+
+## Lattice tokenization
+
+### Backends
+
+All backends implement `ILattice` (sync) or `IAsyncLattice` (Turso) with the same surface area:
+
+```typescript
+import { Lattice as MemoryLattice } from "@khoralabs/tkn/memory";
+import { Lattice as SqliteLattice } from "@khoralabs/tkn/bun-sqlite";
+import { Lattice as TursoLattice } from "@khoralabs/tkn/turso";
+
+const memory = new MemoryLattice();
+const sqlite = new SqliteLattice({ filename: ".tkn/lattice.db" });
+const turso = await TursoLattice.open({ filename: ".tkn/lattice.db" });
+```
+
+| Backend | Persistence | `compile()` | Best for |
+|---------|-------------|-------------|----------|
+| Memory | None | Sync | Tests, small corpora |
+| Bun SQLite | File or `:memory:` | Sync | Local ingest/decode, CLI default |
+| Turso | File or `:memory:` | Async | Non-blocking I/O, same API shape |
+
+### Ingest
+
+Segments from the LZ sequencer are written as lattice entries:
+
+```typescript
+type LatticeSegment = { key: string; sequence: string[] };
+
+lattice.ingest({ key: "hello", sequence: ["h", "e", "l", "l", "o"] });
+lattice.merge([["hello", "world"]]); // record transition
+```
+
+`createLatticeTokenizer` / `createAsyncLatticeTokenizer` wire the sequencer feed into ingest + merge automatically. For bulk file ingest, use `Pipeline` or `AsyncPipeline` with a `GlobFileJob`.
+
+### Compile and decode
+
+After ingest, call `compile()` to build an `ICompiledLattice`, or let `tokenize()` compile lazily on first use:
+
+```typescript
+const compiled = lattice.compile();
+compiled.patternCount;
+compiled.scan("hello");                    // MatchCandidate[][] by offset
+compiled.emissionLogProb("he");            // Unigram log-prob
+compiled.transitionLogProb("he", "llo");   // Bigram log-prob
+
+lattice.tokenize("hello");        // Uses cached compile internally
+lattice.invalidateCompiled();     // Drop cache after further ingest/merge
+```
+
+Decoding uses **add-k smoothed unigram emissions** and **normalized bigram transitions** (SentencePiece-style), scored with Viterbi by default:
+
+```typescript
+lattice.tokenize(longText, { mode: "beam", beamWidth: 32 });
+```
+
+You can also decode directly against a compiled lattice without a backend:
+
+```typescript
+import { compilePatterns, buildLmTables, tokenizeCompiled } from "@khoralabs/tkn";
+
+const lm = buildLmTables(tokenCounts, edges);
+const compiled = compilePatterns(patterns, lm);
+tokenizeCompiled("hello", compiled);
+```
+
+### Tokenizer helpers
+
+```typescript
+import { createLatticeTokenizer, createAsyncLatticeTokenizer } from "@khoralabs/tkn";
+import { Lattice as SqliteLattice } from "@khoralabs/tkn/bun-sqlite";
+import { Lattice as TursoLattice } from "@khoralabs/tkn/turso";
+
+const sync = createLatticeTokenizer(new SqliteLattice());
+await sync.feed(corpus);
+sync.tokenize("hello");
+
+const async = createAsyncLatticeTokenizer(await TursoLattice.open());
+await async.feed(corpus);
+await async.tokenize("hello");
 ```
 
 ## API Reference
@@ -147,6 +296,41 @@ abstract class Resegmenter {
 
 - `transform()` - Reorganize or modify the segments
 - `shouldEmit()` - Return true to emit the queue without resegmentation (when all resegmenters return true, the queue flushes)
+
+### `Pipeline` / `AsyncPipeline`
+
+Connect a sequencer to a lattice for streaming ingest. `Pipeline` takes a sync `ILattice`; `AsyncPipeline` takes `IAsyncLattice`.
+
+```typescript
+import { Pipeline } from "@khoralabs/tkn";
+import { GlobFileJob } from "@khoralabs/tkn";
+import { Lattice } from "@khoralabs/tkn/bun-sqlite";
+
+const lattice = new Lattice({ filename: ".tkn/lattice.db", bulkIngest: true });
+const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+await pipeline.run(new GlobFileJob({ pattern: "corpus/**/*.txt" }));
+```
+
+### `ILattice` / `IAsyncLattice`
+
+Core lattice interface. Key methods:
+
+- `ingest(segment)` / `ingestBatch(segments)` — store patterns and emission counts
+- `merge(pairs)` — record weighted transitions between pattern keys
+- `compile()` — build `ICompiledLattice` from persisted state
+- `invalidateCompiled()` — drop cached compile after mutations
+- `tokenize(text, options?)` — decode with Viterbi or beam
+- `vocabulary()` — all graph pattern strings
+- `getTopTokens(limit?)` — top patterns by hub score
+
+### `ICompiledLattice`
+
+Backend-agnostic decode index produced by `compile()`:
+
+- `scan(text)` — Aho-Corasick match candidates per offset
+- `emissionLogProb(token)` — precomputed unigram score
+- `transitionLogProb(from, to)` — precomputed bigram score
+- `patternCount` — vocabulary size in the automaton
 
 ### `Unicode`
 
@@ -338,30 +522,42 @@ const sequencer = createLZSequencer({
 });
 ```
 
-## Lattice tokenization
+## CLI reference
 
-Feed a corpus into a lattice-backed tokenizer, then segment new text with Viterbi decoding over learned transitions and vocabulary:
+### `tokenizer ingest`
 
-```typescript
-import { createLatticeTokenizer, Lattice } from "@khoralabs/tkn/memory";
+Train a lattice from files on disk.
 
-const lattice = new Lattice();
-const tokenizer = createLatticeTokenizer(lattice);
-
-await tokenizer.feed("hello world ".repeat(100));
-
-console.log(tokenizer.tokenize("hello")); // e.g. ["he", "llo"] — Viterbi, not longest-prefix
-console.log(tokenizer.vocabulary());
-console.log(tokenizer.getTopTokens(5));
+```bash
+bun run tokenizer ingest -f "corpus/**/*.txt" [options]
 ```
 
-For long inputs with a large vocabulary, pass an explicit beam width (approximate; same scoring as Viterbi):
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-f, --files` | (required) | Glob of files to ingest |
+| `--db` | `.tkn/lattice.db` | Output database path |
+| `--backend` | `sqlite` | `sqlite` or `turso` |
+| `--dict-max` | `10000` | Bounded LZ dictionary capacity |
+| `--cwd` | project root | Directory for glob resolution |
 
-```typescript
-tokenizer.tokenize(longText, { mode: "beam", beamWidth: 32 });
+### `tokenize`
+
+Decode text using a trained lattice.
+
+```bash
+bun run tokenize [options]
 ```
 
-SQLite and Turso backends expose the same API via `@khoralabs/tkn/bun-sqlite` and `@khoralabs/tkn/turso` (`createAsyncLatticeTokenizer` for Turso).
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-t, --text` | — | Text to tokenize |
+| `-f, --file` | — | Read text from file (or pipe via stdin) |
+| `--db` | `.tkn/lattice.db` | Lattice database path |
+| `--backend` | `sqlite` | `sqlite` or `turso` |
+| `--decoder` | `viterbi` | `viterbi` or `beam` |
+| `--beam-width` | `32` | Beam width when `--decoder beam` |
+| `--format` | `json` | `json` or `lines` |
+| `-v, --verbose` | off | Print stats to stderr |
 
 ## License
 
