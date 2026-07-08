@@ -1,6 +1,6 @@
-import type { IGraph } from "../graph";
-import type { LatticeSegment } from "../segment";
-import type { ITrie } from "../trie";
+import type { IGraph } from "./graph";
+import type { LatticeSegment } from "./segment";
+import type { ITrie } from "./trie";
 
 /** Ingest one segment into trie + graph with unigram emission counts. */
 export function ingestSegment(graph: IGraph, trie: ITrie, segment: LatticeSegment): void {
