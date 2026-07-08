@@ -44,6 +44,7 @@ function lmDeps(overrides: Partial<LmDecodeDeps>): LmDecodeDeps {
     getTokenCount: () => 0,
     getTotalEmissions: () => 0,
     getVocabSize: () => 10,
+    getTransitionWeight: () => null,
     getOutgoingTotal: () => 0,
     ...overrides,
   };
