@@ -21,19 +21,22 @@ import { DegreeScorer, type ITursoHubScorer } from "./scorers";
 export class Graph {
   private db: TursoDatabase;
   private scorer: ITursoHubScorer;
+  private readonly: boolean;
   private nodeIdCache = new Map<string, number>();
   private statements!: GraphStatements;
 
-  private constructor(database: TursoDatabase, scorer: ITursoHubScorer) {
+  private constructor(database: TursoDatabase, scorer: ITursoHubScorer, readonly = false) {
     this.db = database;
     this.scorer = scorer;
+    this.readonly = readonly;
   }
 
   static async open(
     database: TursoDatabase,
     scorer: ITursoHubScorer = new DegreeScorer(),
+    readonly = false,
   ): Promise<Graph> {
-    const graph = new Graph(database, scorer);
+    const graph = new Graph(database, scorer, readonly);
     await createGraphTables(database);
     graph.statements = await createGraphStatements(database);
     return graph;
@@ -79,6 +82,14 @@ export class Graph {
   }
 
   async getTopTokens(limit = 10): Promise<{ pattern: string; confidence: number }[]> {
+    if (this.readonly) {
+      return (await this.statements.selectTopTokensReadonly.all(
+        ...bindSelectTopTokens({ limit }),
+      )) as {
+        pattern: string;
+        confidence: number;
+      }[];
+    }
     await this.scorer.compute(this.db);
     return (await this.statements.selectTopTokens.all(...bindSelectTopTokens({ limit }))) as {
       pattern: string;

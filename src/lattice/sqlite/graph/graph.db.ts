@@ -14,6 +14,10 @@ export type SelectTopTokensStmt = Statement<
   { pattern: string; confidence: number },
   [BunBind<{ limit: number }>]
 >;
+export type SelectTopTokensReadonlyStmt = Statement<
+  { pattern: string; confidence: number },
+  [BunBind<{ limit: number }>]
+>;
 export type ListPatternsStmt = Statement<{ pattern: string }, []>;
 export type GetTransitionWeightStmt = Statement<
   { weight: number },
@@ -117,6 +121,14 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
     LIMIT $limit
   `);
 
+  const selectTopTokensReadonly: SelectTopTokensReadonlyStmt = database.query(`
+    SELECT token AS pattern,
+      log(1 + COALESCE((SELECT SUM(weight) FROM edges WHERE edges.from_id = nodes.id), 0)) AS confidence
+    FROM nodes
+    ORDER BY confidence DESC
+    LIMIT $limit
+  `);
+
   const listPatterns: ListPatternsStmt = database.query(`
     SELECT token AS pattern FROM nodes ORDER BY token;
   `);
@@ -153,6 +165,7 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
       selectTransitions,
       selectNodeCount,
       selectTopTokens,
+      selectTopTokensReadonly,
       listPatterns,
       getTransitionWeight,
       getConfidence,
@@ -189,6 +202,7 @@ export const createGraphStatements = (database: Database, options?: { tokenCount
     selectTransitions,
     selectNodeCount,
     selectTopTokens,
+    selectTopTokensReadonly,
     listPatterns,
     getTransitionWeight,
     getConfidence,

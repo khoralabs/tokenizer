@@ -57,6 +57,14 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     LIMIT ?
   `);
 
+  const selectTopTokensReadonly = await database.prepare(`
+    SELECT token AS pattern,
+      log(1 + COALESCE((SELECT SUM(weight) FROM edges WHERE edges.from_id = nodes.id), 0)) AS confidence
+    FROM nodes
+    ORDER BY confidence DESC
+    LIMIT ?
+  `);
+
   const listPatterns = await database.prepare(`
     SELECT token AS pattern FROM nodes ORDER BY token;
   `);
@@ -113,6 +121,7 @@ export const createGraphStatements = async (database: TursoDatabase) => {
     insertEdge,
     selectTransitions,
     selectTopTokens,
+    selectTopTokensReadonly,
     listPatterns,
     getTransitionWeight,
     getConfidence,

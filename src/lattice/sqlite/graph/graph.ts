@@ -17,6 +17,7 @@ import {
   type RecordEmissionStmt,
   type SelectAllLmEdgesStmt,
   type SelectAllTokenCountsStmt,
+  type SelectTopTokensReadonlyStmt,
   type SelectTopTokensStmt,
   type SelectTransitionsStmt,
   type UpsertNodeStmt,
@@ -33,6 +34,7 @@ export class Graph implements IGraph {
   private insertEdge!: InsertEdgeStmt;
   private selectTransitions!: SelectTransitionsStmt;
   private selectTopTokens!: SelectTopTokensStmt;
+  private selectTopTokensReadonly!: SelectTopTokensReadonlyStmt;
   private listPatternsStmt!: ListPatternsStmt;
   private getTransitionWeightStmt!: GetTransitionWeightStmt;
   private getConfidenceStmt!: GetConfidenceStmt;
@@ -43,10 +45,12 @@ export class Graph implements IGraph {
   private getOutgoingTotalStmt!: GetOutgoingTotalStmt;
   private selectAllLmEdges!: SelectAllLmEdgesStmt;
   private selectAllTokenCounts?: SelectAllTokenCountsStmt;
+  private readonly: boolean;
 
   constructor(database: Database, scorer: ISqliteHubScorer = new DegreeScorer(), readonly = false) {
     this.db = database;
     this.scorer = scorer;
+    this.readonly = readonly;
     this.initSchema(readonly);
     this.tokenCountsEnabled = hasTokenCountColumn(this.db);
     this.prepareStatements();
@@ -62,6 +66,7 @@ export class Graph implements IGraph {
       insertEdge,
       selectTransitions,
       selectTopTokens,
+      selectTopTokensReadonly,
       listPatterns,
       getTransitionWeight,
       getConfidence,
@@ -78,6 +83,7 @@ export class Graph implements IGraph {
     this.insertEdge = insertEdge;
     this.selectTransitions = selectTransitions;
     this.selectTopTokens = selectTopTokens;
+    this.selectTopTokensReadonly = selectTopTokensReadonly;
     this.listPatternsStmt = listPatterns;
     this.getTransitionWeightStmt = getTransitionWeight;
     this.getConfidenceStmt = getConfidence;
@@ -126,6 +132,9 @@ export class Graph implements IGraph {
   }
 
   getTopTokens(limit = 10): { pattern: string; confidence: number }[] {
+    if (this.readonly) {
+      return this.selectTopTokensReadonly.all(bind({ limit }));
+    }
     this.scorer.compute(this.db);
     return this.selectTopTokens.all(bind({ limit }));
   }

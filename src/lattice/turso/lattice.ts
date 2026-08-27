@@ -12,6 +12,7 @@ export interface TursoLatticeConfig {
   filename?: string;
   scorer?: ITursoHubScorer;
   bulkIngest?: boolean;
+  readonly?: boolean;
 }
 
 /**
@@ -37,10 +38,11 @@ export class Lattice implements IAsyncLattice {
       filename = ":memory:",
       scorer = new DegreeScorer(),
       bulkIngest = false,
+      readonly = false,
     } = typeof config === "string" ? { filename: config } : config;
 
     const db = await connectTurso(filename);
-    const graph = await Graph.open(db, scorer);
+    const graph = await Graph.open(db, scorer, readonly);
     const trie = await Trie.open(db);
     return new Lattice(db, graph, trie, bulkIngest);
   }

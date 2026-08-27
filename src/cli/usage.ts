@@ -6,6 +6,7 @@ export function printTokenizerUsage(): void {
 Commands:
   ingest    Ingest files into a lattice database
   tokenize  Decode text using a trained lattice (see: tokenize --help)
+  topk      Print vocabulary size and top hub-scored patterns
 
 Global:
   -h, --help     Show this help
@@ -49,6 +50,18 @@ Output:
   --format <name>        json or lines (default: json)
   -q, --quiet            Suppress informational stderr output
   -v, --verbose          Print lattice stats to stderr
+  -h, --help             Show this help
+
+Backend comes from tkn.config.json or TKN_CONFIG.
+`);
+}
+
+export function printTopkUsage(): void {
+  console.log(`Usage: tokenizer topk [options]
+
+  --db <path>            Override lattice.path from config (default: ${DEFAULT_CONFIG.lattice.path})
+  -n, --limit <n>        Number of patterns to show (default: ${DEFAULT_CONFIG.output.topK}, max 100)
+  --format <name>        human or json (default: human)
   -h, --help             Show this help
 
 Backend comes from tkn.config.json or TKN_CONFIG.

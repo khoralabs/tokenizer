@@ -5,9 +5,15 @@ import { parseArgs } from "node:util";
 import { applyDbOverride, loadConfig } from "../src/cli/config.ts";
 import { runDecodeFromCli } from "../src/cli/run-decode.ts";
 import { runIngest } from "../src/cli/run-ingest.ts";
-import { printDecodeUsage, printIngestUsage, printTokenizerUsage } from "../src/cli/usage.ts";
+import { runTopk } from "../src/cli/run-topk.ts";
+import {
+  printDecodeUsage,
+  printIngestUsage,
+  printTokenizerUsage,
+  printTopkUsage,
+} from "../src/cli/usage.ts";
 
-const SUBCOMMANDS = ["ingest", "tokenize"] as const;
+const SUBCOMMANDS = ["ingest", "tokenize", "topk"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
 function parseSubcommand(argv: string[]): { command: Subcommand; rest: string[] } | undefined {
@@ -50,6 +56,43 @@ async function runTokenizeCommand(argv: string[]): Promise<void> {
     format: values.format,
     verbose: values.verbose ?? false,
     quiet: values.quiet ?? false,
+  });
+}
+
+async function runTopkCommand(argv: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      db: { type: "string" },
+      limit: { type: "string", short: "n" },
+      format: { type: "string" },
+      help: { type: "boolean", short: "h" },
+    },
+  });
+
+  if (values.help) {
+    printTopkUsage();
+    return;
+  }
+
+  const cwd = process.cwd();
+  let config = await loadConfig({ cwd });
+  config = applyDbOverride(config, values.db, cwd);
+
+  const format = values.format ?? "human";
+  if (format !== "human" && format !== "json") {
+    throw new Error("--format must be human or json");
+  }
+
+  let limit: number | undefined;
+  if (values.limit !== undefined) {
+    limit = Number(values.limit);
+  }
+
+  await runTopk({
+    config,
+    limit,
+    format: format as "human" | "json",
   });
 }
 
@@ -113,7 +156,7 @@ async function main(): Promise<void> {
     if (argv.length > 0 && argv[0]?.startsWith("-")) {
       console.error("Error: options before the subcommand are not supported\n");
     } else {
-      console.error("Error: expected subcommand: ingest or tokenize\n");
+      console.error("Error: expected subcommand: ingest, tokenize, or topk\n");
     }
     printTokenizerUsage();
     process.exit(1);
@@ -132,6 +175,17 @@ async function main(): Promise<void> {
     } catch (error) {
       console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
       printDecodeUsage();
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (match.command === "topk") {
+    try {
+      await runTopkCommand(commandArgs);
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);
+      printTopkUsage();
       process.exit(1);
     }
     return;

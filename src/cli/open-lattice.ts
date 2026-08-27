@@ -30,8 +30,12 @@ export function openSqliteLattice(options: OpenLatticeOptions): SqliteLattice {
 }
 
 export async function openTursoLattice(options: OpenLatticeOptions): Promise<TursoLattice> {
-  const { config, bulkIngest = false } = options;
-  return await TursoLattice.open({ filename: config.lattice.path, bulkIngest });
+  const { config, bulkIngest = false, readonly = false } = options;
+  return await TursoLattice.open({
+    filename: config.lattice.path,
+    bulkIngest,
+    readonly,
+  });
 }
 
 export function openSqliteLatticeFromConfig(
