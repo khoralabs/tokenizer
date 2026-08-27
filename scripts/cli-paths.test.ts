@@ -6,6 +6,13 @@ import path from "node:path";
 const tokenizerScript = path.resolve(import.meta.dir, "tokenizer.ts");
 const tokenizeScript = path.resolve(import.meta.dir, "tokenize.ts");
 
+function writeDefaultConfig(tmpDir: string): void {
+  writeFileSync(
+    path.join(tmpDir, "tkn.config.json"),
+    JSON.stringify({ lattice: { backend: "sqlite", path: ".tkn/lattice.db" } }),
+  );
+}
+
 describe("CLI path resolution", () => {
   let tmpDir: string | undefined;
 
@@ -18,6 +25,7 @@ describe("CLI path resolution", () => {
 
   test("tokenizer ingest resolves --db relative to caller cwd", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
+    writeDefaultConfig(tmpDir);
     writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
 
     const proc = Bun.spawn(
@@ -31,6 +39,7 @@ describe("CLI path resolution", () => {
 
   test("tokenize resolves --file and --db relative to caller cwd", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
+    writeDefaultConfig(tmpDir);
     writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
     writeFileSync(path.join(tmpDir, "input.txt"), "hello");
 
