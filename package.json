@@ -1,5 +1,7 @@
 {
   "name": "@khoralabs/tkn",
+  "description": "Online pattern discovery and lattice-backed decoding for sequential text.",
+  "license": "MIT",
   "module": "src/index.ts",
   "type": "module",
   "exports": {
