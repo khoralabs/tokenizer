@@ -32,6 +32,8 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepare": "husky",
+    "agent-review": "agent-review",
+    "review": "agent-review run --scope staged --include-workstream",
     "context": "bun run scripts/context.ts",
     "tokenizer": "bun scripts/tokenizer.ts",
     "tokenize": "bun scripts/tokenize.ts"
@@ -41,18 +43,19 @@
     "tokenize": "./scripts/tokenize.ts"
   },
   "dependencies": {
-    "@biomejs/biome": "^2.4.16",
     "@tursodatabase/database": "^0.6.1",
     "typebox": "^1.3.3",
     "typescript": "^5"
   },
   "private": true,
   "devDependencies": {
+    "@biomejs/biome": "^2.5.5",
+    "@khoralabs/agent-review": "0.2.0",
     "@types/bun": "latest",
-    "minimatch": "^10.2.5",
-    "parse-gitignore": "^2.0.0",
     "@types/parse-gitignore": "^1.0.2",
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "minimatch": "^10.2.5",
+    "parse-gitignore": "^2.0.0"
   },
   "peerDependencies": {
     "typescript": "^5"

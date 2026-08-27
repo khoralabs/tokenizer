@@ -1,0 +1,20 @@
+---
+description: Conventional Commits 1.0.0 for planning, PRs, and commit messages
+alwaysApply: true
+---
+
+When planning work, writing PR descriptions, or drafting/reviewing commit messages, follow Conventional Commits 1.0.0.
+
+```
+<type>[optional scope][optional !]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+- `feat` / `fix` are required types for features and bug fixes; other types MAY be used (`docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`).
+- Breaking changes use `!` before `:` and/or a `BREAKING CHANGE:` footer.
+- Adopt going forward; do not rewrite published history.
+
+Full specification (MUST/SHOULD rules, examples, FAQ): `.agents/skills/agent-review/commit-message/SKILL.md`.
