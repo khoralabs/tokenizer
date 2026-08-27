@@ -37,7 +37,33 @@ describe("CLI path resolution", () => {
     expect(existsSync(path.join(tmpDir, "data", "lattice.db"))).toBe(true);
   });
 
-  test("tokenize resolves --file and --db relative to caller cwd", async () => {
+  test("tokenizer tokenize matches tokenize bin", async () => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
+    writeDefaultConfig(tmpDir);
+    writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
+
+    const ingest = Bun.spawn(
+      ["bun", tokenizerScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
+      { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(await ingest.exited).toBe(0);
+
+    const viaBin = Bun.spawn(
+      ["bun", tokenizeScript, "--text", "hello", "--db", "data/lattice.db", "--quiet"],
+      { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
+    );
+    const viaSub = Bun.spawn(
+      ["bun", tokenizerScript, "tokenize", "--text", "hello", "--db", "data/lattice.db", "--quiet"],
+      { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
+    );
+    const binOut = await new Response(viaBin.stdout).text();
+    const subOut = await new Response(viaSub.stdout).text();
+    expect(await viaBin.exited).toBe(0);
+    expect(await viaSub.exited).toBe(0);
+    expect(subOut).toBe(binOut);
+  });
+
+  test("tokenize resolves --file relative to caller cwd", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
     writeDefaultConfig(tmpDir);
     writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
@@ -50,12 +76,11 @@ describe("CLI path resolution", () => {
     expect(await ingest.exited).toBe(0);
 
     const tokenize = Bun.spawn(
-      ["bun", tokenizeScript, "--file", "input.txt", "--db", "data/lattice.db"],
+      ["bun", tokenizeScript, "--file", "input.txt", "--db", "data/lattice.db", "--quiet"],
       { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
     );
     const stdout = await new Response(tokenize.stdout).text();
-    const exitCode = await tokenize.exited;
-    expect(exitCode).toBe(0);
+    expect(await tokenize.exited).toBe(0);
     expect(stdout.trim()).toBeTruthy();
   });
 });

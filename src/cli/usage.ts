@@ -1,17 +1,17 @@
 import { DEFAULT_CONFIG } from "./config.ts";
 
 export function printTokenizerUsage(): void {
-  console.log(`Usage: tokenizer ingest -f <glob> [options]
+  console.log(`Usage: tokenizer <command> [options]
 
 Commands:
   ingest    Ingest files into a lattice database
+  tokenize  Decode text using a trained lattice (see: tokenize --help)
 
 Global:
   -h, --help     Show this help
 
-Run 'tokenizer ingest --help' for ingest options.
-
-Decode with the tokenize binary. Backend settings come from tkn.config.json or TKN_CONFIG.
+Run 'tokenizer <command> --help' for command-specific options.
+Backend settings come from tkn.config.json or TKN_CONFIG.
 `);
 }
 
@@ -25,5 +25,32 @@ export function printIngestUsage(): void {
   -h, --help             Show this help
 
 Backend and other settings come from tkn.config.json or TKN_CONFIG.
+`);
+}
+
+export function printDecodeUsage(): void {
+  console.log(`Usage: tokenize [options]
+
+Decode input text using a trained lattice.
+
+Input (one required):
+  -t, --text <string>    Text to tokenize
+  -f, --file <path>      Read text from a file
+                         (or pipe text via stdin)
+
+Lattice:
+  --db <path>            Override lattice.path from config (default: ${DEFAULT_CONFIG.lattice.path})
+
+Decoder:
+  --decoder <name>       Override decode.decoder (default: ${DEFAULT_CONFIG.decode.decoder})
+  --beam-width <n>       Beam width when --decoder beam (default: ${DEFAULT_CONFIG.decode.beamWidth})
+
+Output:
+  --format <name>        json or lines (default: json)
+  -q, --quiet            Suppress informational stderr output
+  -v, --verbose          Print lattice stats to stderr
+  -h, --help             Show this help
+
+Backend comes from tkn.config.json or TKN_CONFIG.
 `);
 }
