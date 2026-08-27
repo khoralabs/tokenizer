@@ -16,7 +16,7 @@ Online pattern discovery and lattice-backed decoding for sequential text.
 
 The npm package is `@khoralabs/tkn`.
 
-tkn discovers segments in sequential input through an LZ-style dictionary gate. The gate grows a prefix while the extended pattern is in the dictionary. The gate emits a segment when the extended pattern is not in the dictionary.
+tkn discovers segments in sequential input through a LZ-style dictionary gate. The gate grows a prefix while the extended pattern is in the dictionary. The gate emits a segment when the extended pattern is not in the dictionary.
 
 An optional lattice stores discovered patterns and transitions between them. Decoding runs Aho-Corasick pattern matching and Viterbi or beam search over add-k smoothed unigram and normalized bigram scores.
 
