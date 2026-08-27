@@ -4,10 +4,18 @@ import { parseArgs } from "node:util";
 import { applyDbOverride, loadConfig } from "../src/cli/config.ts";
 import { runDecodeFromCli } from "../src/cli/run-decode.ts";
 import { printDecodeUsage } from "../src/cli/usage.ts";
+import { getPackageVersion } from "../src/cli/version.ts";
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+
+  if (argv.includes("--version")) {
+    console.log(getPackageVersion());
+    return;
+  }
+
   const { values } = parseArgs({
-    args: process.argv.slice(2),
+    args: argv,
     options: {
       text: { type: "string", short: "t" },
       file: { type: "string", short: "f" },
@@ -38,7 +46,7 @@ async function main(): Promise<void> {
       beamWidth: values["beam-width"],
       format: values.format,
       verbose: values.verbose ?? false,
-      quiet: values.quiet ?? false,
+      quiet: values.quiet ?? !(values.verbose ?? false),
     });
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}\n`);

@@ -10,6 +10,7 @@ Commands:
 
 Global:
   -h, --help     Show this help
+  --version      Show package version
 
 Run 'tokenizer <command> --help' for command-specific options.
 Backend settings come from tkn.config.json or TKN_CONFIG.
@@ -48,7 +49,7 @@ Decoder:
 
 Output:
   --format <name>        json or lines (default: json)
-  -q, --quiet            Suppress informational stderr output
+  -q, --quiet            Suppress informational stderr (default unless --verbose)
   -v, --verbose          Print lattice stats to stderr
   -h, --help             Show this help
 

@@ -12,6 +12,7 @@ import {
   printTokenizerUsage,
   printTopkUsage,
 } from "../src/cli/usage.ts";
+import { getPackageVersion } from "../src/cli/version.ts";
 
 const SUBCOMMANDS = ["ingest", "tokenize", "topk"] as const;
 type Subcommand = (typeof SUBCOMMANDS)[number];
@@ -55,7 +56,7 @@ async function runTokenizeCommand(argv: string[]): Promise<void> {
     beamWidth: values["beam-width"],
     format: values.format,
     verbose: values.verbose ?? false,
-    quiet: values.quiet ?? false,
+    quiet: values.quiet ?? !(values.verbose ?? false),
   });
 }
 
@@ -145,6 +146,11 @@ async function runIngestCommand(argv: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+
+  if (argv.includes("--version")) {
+    console.log(getPackageVersion());
+    return;
+  }
 
   if (argv.length === 0 || (argv.length === 1 && (argv[0] === "-h" || argv[0] === "--help"))) {
     printTokenizerUsage();

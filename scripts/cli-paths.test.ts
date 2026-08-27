@@ -63,6 +63,26 @@ describe("CLI path resolution", () => {
     expect(subOut).toBe(binOut);
   });
 
+  test("tokenizer --version prints package version", async () => {
+    const proc = Bun.spawn(["bun", tokenizerScript, "--version"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    expect(await proc.exited).toBe(0);
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  test("tokenize --version prints package version", async () => {
+    const proc = Bun.spawn(["bun", tokenizeScript, "--version"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    expect(await proc.exited).toBe(0);
+    expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
   test("tokenize resolves --file relative to caller cwd", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
     writeDefaultConfig(tmpDir);

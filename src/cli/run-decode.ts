@@ -187,7 +187,7 @@ export async function runDecodeFromCli(
     decode,
     format,
     verbose: overrides.verbose ?? false,
-    quiet: overrides.quiet ?? false,
+    quiet: overrides.quiet ?? !overrides.verbose,
   });
 }
 
