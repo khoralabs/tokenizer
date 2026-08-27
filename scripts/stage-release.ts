@@ -18,7 +18,7 @@ export type StageReleaseResult = {
 };
 
 const COPY_PATHS = ["src", "README.md", "LICENSE"] as const;
-const SCRIPT_FILES = ["tokenizer.ts", "tokenize.ts"] as const;
+const SCRIPT_FILES = ["tkn.ts", "tokenize.ts"] as const;
 
 export async function stageRelease(opts: StageReleaseOptions): Promise<StageReleaseResult> {
   const { workspaceRoot, version } = opts;

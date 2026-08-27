@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const tokenizerScript = path.resolve(import.meta.dir, "tokenizer.ts");
+const tknScript = path.resolve(import.meta.dir, "tkn.ts");
 const tokenizeScript = path.resolve(import.meta.dir, "tokenize.ts");
 
 function writeDefaultConfig(tmpDir: string): void {
@@ -23,27 +23,28 @@ describe("CLI path resolution", () => {
     }
   });
 
-  test("tokenizer ingest resolves --db relative to caller cwd", async () => {
+  test("tkn ingest resolves --db relative to caller cwd", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
     writeDefaultConfig(tmpDir);
     writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
 
-    const proc = Bun.spawn(
-      ["bun", tokenizerScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
-      { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
-    );
+    const proc = Bun.spawn(["bun", tknScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"], {
+      cwd: tmpDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const exitCode = await proc.exited;
     expect(exitCode).toBe(0);
     expect(existsSync(path.join(tmpDir, "data", "lattice.db"))).toBe(true);
   });
 
-  test("tokenizer tokenize matches tokenize bin", async () => {
+  test("tkn tokenize matches tokenize bin", async () => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "tkn-cli-"));
     writeDefaultConfig(tmpDir);
     writeFileSync(path.join(tmpDir, "sample.txt"), "hello world hello world ");
 
     const ingest = Bun.spawn(
-      ["bun", tokenizerScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
+      ["bun", tknScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
       { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
     );
     expect(await ingest.exited).toBe(0);
@@ -53,7 +54,7 @@ describe("CLI path resolution", () => {
       { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
     );
     const viaSub = Bun.spawn(
-      ["bun", tokenizerScript, "tokenize", "--text", "hello", "--db", "data/lattice.db", "--quiet"],
+      ["bun", tknScript, "tokenize", "--text", "hello", "--db", "data/lattice.db", "--quiet"],
       { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
     );
     const binOut = await new Response(viaBin.stdout).text();
@@ -63,8 +64,8 @@ describe("CLI path resolution", () => {
     expect(subOut).toBe(binOut);
   });
 
-  test("tokenizer --version prints package version", async () => {
-    const proc = Bun.spawn(["bun", tokenizerScript, "--version"], {
+  test("tkn --version prints package version", async () => {
+    const proc = Bun.spawn(["bun", tknScript, "--version"], {
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -90,7 +91,7 @@ describe("CLI path resolution", () => {
     writeFileSync(path.join(tmpDir, "input.txt"), "hello");
 
     const ingest = Bun.spawn(
-      ["bun", tokenizerScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
+      ["bun", tknScript, "ingest", "-f", "*.txt", "--db", "data/lattice.db"],
       { cwd: tmpDir, stdout: "pipe", stderr: "pipe" },
     );
     expect(await ingest.exited).toBe(0);

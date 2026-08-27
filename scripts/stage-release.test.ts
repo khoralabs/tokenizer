@@ -25,7 +25,7 @@ describe("stageRelease", () => {
     });
     expect(result.releaseDir).toBe(releaseDir);
     expect(existsSync(path.join(result.releaseDir, "src", "index.ts"))).toBe(true);
-    expect(existsSync(path.join(result.releaseDir, "scripts", "tokenizer.ts"))).toBe(true);
+    expect(existsSync(path.join(result.releaseDir, "scripts", "tkn.ts"))).toBe(true);
     expect(existsSync(path.join(result.releaseDir, "scripts", "tokenize.ts"))).toBe(true);
     expect(existsSync(path.join(result.releaseDir, "scripts", "stage-release.test.ts"))).toBe(
       false,
@@ -36,7 +36,7 @@ describe("stageRelease", () => {
     const pkg = JSON.parse(await Bun.file(path.join(result.releaseDir, "package.json")).text()) as {
       version: string;
       private?: boolean;
-      bin?: { tokenizer?: string; tokenize?: string };
+      bin?: { tkn?: string; tokenize?: string };
       dependencies?: Record<string, string>;
       peerDependencies?: Record<string, string>;
       scripts?: unknown;
@@ -44,7 +44,7 @@ describe("stageRelease", () => {
     };
     expect(pkg.version).toBe("0.0.0-test");
     expect(pkg.private).toBeUndefined();
-    expect(pkg.bin?.tokenizer).toBe("./scripts/tokenizer.ts");
+    expect(pkg.bin?.tkn).toBe("./scripts/tkn.ts");
     expect(pkg.bin?.tokenize).toBe("./scripts/tokenize.ts");
     expect(pkg.dependencies?.typebox).toBeDefined();
     expect(pkg.peerDependencies?.typescript).toBeDefined();

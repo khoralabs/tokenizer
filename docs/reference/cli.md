@@ -1,6 +1,6 @@
 # CLI reference
 
-Two binaries: `tokenizer` (ingest, tokenize, topk) and `tokenize` (decode).
+Two binaries: `tkn` (ingest, tokenize, topk) and `tokenize` (decode).
 
 Configuration comes from `tkn.config.json` in the caller working directory, or from the path in `TKN_CONFIG`. Simple flags can override individual settings.
 
@@ -31,16 +31,16 @@ Example:
 | `ingest.dictMax` | number | LZ dictionary capacity; override with `--dict-max` |
 | `decode.decoder` | `viterbi` or `beam` | Override with `--decoder` |
 | `decode.beamWidth` | number | Override with `--beam-width` |
-| `output.topK` | number (max 100) | Default top-k for ingest summary and `tokenizer topk` |
+| `output.topK` | number (max 100) | Default top-k for ingest summary and `tkn topk` |
 
 See [tkn.config.example.json](../../tkn.config.example.json) in the repository root.
 
 Path flags (`--db`, `--cwd`, `--file`) resolve relative to the **caller working directory**, not the package install location.
 
-## `tokenizer`
+## `tkn`
 
-Entry: `scripts/tokenizer.ts`  
-Bin name: `tokenizer`
+Entry: `scripts/tkn.ts`  
+Bin name: `tkn`
 
 ### Subcommands
 
@@ -55,10 +55,10 @@ Global flags:
 - `-h`, `--help` — show usage (exit 0)
 - `--version` — print package version
 
-### `tokenizer ingest`
+### `tkn ingest`
 
 ```bash
-tokenizer ingest -f <glob> [options]
+tkn ingest -f <glob> [options]
 ```
 
 | Flag | Short | Default | Description |
@@ -71,14 +71,14 @@ tokenizer ingest -f <glob> [options]
 
 Exit code `1` when zero segments are emitted.
 
-### `tokenizer tokenize`
+### `tkn tokenize`
 
 Same options as the `tokenize` binary. See below.
 
-### `tokenizer topk`
+### `tkn topk`
 
 ```bash
-tokenizer topk [options]
+tkn topk [options]
 ```
 
 | Flag | Short | Default | Description |

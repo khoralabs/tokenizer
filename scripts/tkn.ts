@@ -9,7 +9,7 @@ import { runTopk } from "../src/cli/run-topk.ts";
 import {
   printDecodeUsage,
   printIngestUsage,
-  printTokenizerUsage,
+  printTknUsage,
   printTopkUsage,
 } from "../src/cli/usage.ts";
 import { getPackageVersion } from "../src/cli/version.ts";
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
   }
 
   if (argv.length === 0 || (argv.length === 1 && (argv[0] === "-h" || argv[0] === "--help"))) {
-    printTokenizerUsage();
+    printTknUsage();
     return;
   }
 
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
     } else {
       console.error("Error: expected subcommand: ingest, tokenize, or topk\n");
     }
-    printTokenizerUsage();
+    printTknUsage();
     process.exit(1);
   }
 
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
   }
 
   console.error(`Error: unknown command '${match.command}'\n`);
-  printTokenizerUsage();
+  printTknUsage();
   process.exit(1);
 }
 

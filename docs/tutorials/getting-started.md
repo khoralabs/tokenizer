@@ -67,7 +67,7 @@ Create `tkn.config.json` in your working directory (or copy [tkn.config.example.
 Run ingest on a text corpus from your working directory:
 
 ```bash
-bun run tokenizer ingest -f "corpus/**/*.txt"
+bun run tkn ingest -f "corpus/**/*.txt"
 ```
 
 The command writes the database path from config (default `.tkn/lattice.db`). It prints segment count, vocabulary size, and top patterns.
@@ -78,10 +78,10 @@ The command writes the database path from config (default `.tkn/lattice.db`). It
 bun run tokenize --text "hello world"
 ```
 
-Or use the `tokenizer` subcommand:
+Or use the `tkn` subcommand:
 
 ```bash
-bun run tokenizer tokenize --text "hello world"
+bun run tkn tokenize --text "hello world"
 ```
 
 Stdout contains a JSON array of token strings. Informational messages are suppressed by default; pass `--verbose` for lattice stats.
@@ -89,7 +89,7 @@ Stdout contains a JSON array of token strings. Informational messages are suppre
 Inspect top patterns:
 
 ```bash
-bun run tokenizer topk -n 5
+bun run tkn topk -n 5
 ```
 
 ## Next steps

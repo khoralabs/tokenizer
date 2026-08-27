@@ -22,13 +22,13 @@ Create `tkn.config.json` in your working directory:
 Run ingest:
 
 ```bash
-bun run tokenizer ingest -f "corpus/**/*.txt"
+bun run tkn ingest -f "corpus/**/*.txt"
 ```
 
 Optional flag overrides:
 
 ```bash
-bun run tokenizer ingest \
+bun run tkn ingest \
   -f "corpus/**/*.txt" \
   --db .tkn/lattice.db \
   --dict-max 10000 \

@@ -24,7 +24,7 @@ describe("runTopk", () => {
     const ingest = Bun.spawn(
       [
         "bun",
-        path.resolve(import.meta.dir, "../../scripts/tokenizer.ts"),
+        path.resolve(import.meta.dir, "../../scripts/tkn.ts"),
         "ingest",
         "-f",
         "*.txt",
@@ -67,7 +67,7 @@ describe("runTopk", () => {
     const ingest = Bun.spawn(
       [
         "bun",
-        path.resolve(import.meta.dir, "../../scripts/tokenizer.ts"),
+        path.resolve(import.meta.dir, "../../scripts/tkn.ts"),
         "ingest",
         "-f",
         "*.txt",
@@ -126,7 +126,7 @@ describe("runTopk", () => {
     const ingest = Bun.spawn(
       [
         "bun",
-        path.resolve(import.meta.dir, "../../scripts/tokenizer.ts"),
+        path.resolve(import.meta.dir, "../../scripts/tkn.ts"),
         "ingest",
         "-f",
         "*.txt",

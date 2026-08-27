@@ -65,9 +65,9 @@ Configure lattice backend and defaults in `tkn.config.json` (or set `TKN_CONFIG`
 
 | Command | Action |
 |---------|--------|
-| `tokenizer ingest` | Ingest files into a lattice database |
-| `tokenizer tokenize` | Decode text (same as `tokenize` bin) |
-| `tokenizer topk` | Print vocabulary size and top hub-scored patterns |
+| `tkn ingest` | Ingest files into a lattice database |
+| `tkn tokenize` | Decode text (same as `tokenize` bin) |
+| `tkn topk` | Print vocabulary size and top hub-scored patterns |
 | `tokenize` | Decode text against a trained lattice database |
 
 See [CLI reference](docs/reference/cli.md) for configuration, flags, and examples.

@@ -15,10 +15,10 @@ Ensure `tkn.config.json` points at your trained database, then:
 bun run tokenize --text "hello world"
 ```
 
-Equivalent via `tokenizer`:
+Equivalent via `tkn`:
 
 ```bash
-bun run tokenizer tokenize --text "hello world"
+bun run tkn tokenize --text "hello world"
 ```
 
 **Outcome:** stdout is a JSON array, for example `["he","llo"," wor","ld"]`. Stderr is quiet by default; add `--verbose` for lattice stats.

@@ -23,12 +23,12 @@
     "bun"
   ],
   "bin": {
-    "tokenizer": "./scripts/tokenizer.ts",
+    "tkn": "./scripts/tkn.ts",
     "tokenize": "./scripts/tokenize.ts"
   },
   "files": [
     "src",
-    "scripts/tokenizer.ts",
+    "scripts/tkn.ts",
     "scripts/tokenize.ts",
     "README.md",
     "LICENSE"
@@ -70,7 +70,7 @@
     "agent-review": "agent-review",
     "review": "agent-review run --scope staged --include-workstream",
     "context": "bun run scripts/context.ts",
-    "tokenizer": "bun scripts/tokenizer.ts",
+    "tkn": "bun scripts/tkn.ts",
     "tokenize": "bun scripts/tokenize.ts"
   },
   "dependencies": {

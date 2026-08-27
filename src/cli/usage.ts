@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from "./config.ts";
 
-export function printTokenizerUsage(): void {
-  console.log(`Usage: tokenizer <command> [options]
+export function printTknUsage(): void {
+  console.log(`Usage: tkn <command> [options]
 
 Commands:
   ingest    Ingest files into a lattice database
@@ -12,13 +12,13 @@ Global:
   -h, --help     Show this help
   --version      Show package version
 
-Run 'tokenizer <command> --help' for command-specific options.
+Run 'tkn <command> --help' for command-specific options.
 Backend settings come from tkn.config.json or TKN_CONFIG.
 `);
 }
 
 export function printIngestUsage(): void {
-  console.log(`Usage: tokenizer ingest -f <glob> [options]
+  console.log(`Usage: tkn ingest -f <glob> [options]
 
   -f, --files <glob>     Glob pattern of files to ingest (required)
   --db <path>            Override lattice.path from config (default: ${DEFAULT_CONFIG.lattice.path})
@@ -58,7 +58,7 @@ Backend comes from tkn.config.json or TKN_CONFIG.
 }
 
 export function printTopkUsage(): void {
-  console.log(`Usage: tokenizer topk [options]
+  console.log(`Usage: tkn topk [options]
 
   --db <path>            Override lattice.path from config (default: ${DEFAULT_CONFIG.lattice.path})
   -n, --limit <n>        Number of patterns to show (default: ${DEFAULT_CONFIG.output.topK}, max 100)
