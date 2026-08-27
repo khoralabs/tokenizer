@@ -1,9 +1,38 @@
 {
   "name": "@khoralabs/tkn",
-  "description": "Online pattern discovery and lattice-backed decoding for sequential text.",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fast greedy pattern discovery and lattice-backed tokenizer for sequential data.",
   "license": "MIT",
-  "module": "src/index.ts",
   "type": "module",
+  "module": "src/index.ts",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoralabs/tokenizer.git"
+  },
+  "homepage": "https://github.com/khoralabs/tokenizer#readme",
+  "bugs": "https://github.com/khoralabs/tokenizer/issues",
+  "keywords": [
+    "tokenizer",
+    "lz",
+    "pattern-discovery",
+    "sequential-data",
+    "bun"
+  ],
+  "bin": {
+    "tokenizer": "./scripts/tokenizer.ts",
+    "tokenize": "./scripts/tokenize.ts"
+  },
+  "files": [
+    "src",
+    "scripts/tokenizer.ts",
+    "scripts/tokenize.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "import": "./src/index.ts",
@@ -25,6 +54,9 @@
       "types": "./src/memory.ts"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "biome": "biome check .",
     "check": "biome check .",
@@ -34,22 +66,17 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepare": "husky",
+    "stage-release": "bun run scripts/stage-release.ts",
     "agent-review": "agent-review",
     "review": "agent-review run --scope staged --include-workstream",
     "context": "bun run scripts/context.ts",
     "tokenizer": "bun scripts/tokenizer.ts",
     "tokenize": "bun scripts/tokenize.ts"
   },
-  "bin": {
-    "tokenizer": "./scripts/tokenizer.ts",
-    "tokenize": "./scripts/tokenize.ts"
-  },
   "dependencies": {
     "@tursodatabase/database": "^0.6.1",
-    "typebox": "^1.3.3",
-    "typescript": "^5"
+    "typebox": "^1.3.3"
   },
-  "private": true,
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
     "@khoralabs/agent-review": "0.2.0",
@@ -57,7 +84,8 @@
     "@types/parse-gitignore": "^1.0.2",
     "husky": "^9.1.7",
     "minimatch": "^10.2.5",
-    "parse-gitignore": "^2.0.0"
+    "parse-gitignore": "^2.0.0",
+    "typescript": "^5"
   },
   "peerDependencies": {
     "typescript": "^5"

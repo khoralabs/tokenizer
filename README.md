@@ -39,6 +39,10 @@ bun add @khoralabs/tkn
 
 Each subpath re-exports the full main API and adds a backend-specific `Lattice` class.
 
+## Releasing
+
+Publish via GitHub Actions (`workflow_dispatch` on [`.github/workflows/release.yml`](./.github/workflows/release.yml)): choose semver + npm dist-tag. Staging script: `bun run stage-release -- <version>`.
+
 ## Usage
 
 ```typescript

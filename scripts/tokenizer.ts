@@ -12,9 +12,6 @@ import { GlobFileJob } from "../src/pipeline/jobs/glob-file-job";
 import { Pipeline } from "../src/pipeline/pipeline";
 import { Queue, Sequencer } from "../src/sequencer";
 
-const projectRoot = resolve(import.meta.dir, "..");
-process.chdir(projectRoot);
-
 const DEFAULT_DB = ".tkn/lattice.db";
 const DEFAULT_DICT_MAX = 10_000;
 const DEFAULT_BACKEND = "sqlite";
@@ -147,8 +144,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const dbPath = resolve(projectRoot, values.db ?? DEFAULT_DB);
-  const cwd = resolve(projectRoot, values.cwd ?? ".");
+  const dbPath = resolve(process.cwd(), values.db ?? DEFAULT_DB);
+  const cwd = resolve(process.cwd(), values.cwd ?? ".");
 
   await ingest({ pattern, dbPath, backend, dictMax, cwd });
 }

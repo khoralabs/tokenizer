@@ -7,9 +7,6 @@ import { Lattice as SqliteLattice } from "../src/lattice/sqlite/lattice";
 import type { LatticeDecodeOptions } from "../src/lattice/tokenize";
 import { Lattice as TursoLattice } from "../src/lattice/turso/lattice";
 
-const projectRoot = resolve(import.meta.dir, "..");
-process.chdir(projectRoot);
-
 const DEFAULT_DB = ".tkn/lattice.db";
 const DEFAULT_BACKEND = "sqlite";
 const DEFAULT_DECODER = "viterbi";
@@ -46,7 +43,8 @@ function normalizeInput(text: string): string {
 
 async function readInput(text?: string, file?: string): Promise<string> {
   if (text !== undefined) return normalizeInput(text);
-  if (file !== undefined) return normalizeInput(await readFile(resolve(projectRoot, file), "utf8"));
+  if (file !== undefined)
+    return normalizeInput(await readFile(resolve(process.cwd(), file), "utf8"));
 
   if (!process.stdin.isTTY) {
     const piped = await Bun.stdin.text();
@@ -210,7 +208,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const dbPath = resolve(projectRoot, values.db ?? DEFAULT_DB);
+  const dbPath = resolve(process.cwd(), values.db ?? DEFAULT_DB);
 
   await tokenize({
     input,
