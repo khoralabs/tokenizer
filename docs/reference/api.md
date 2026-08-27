@@ -118,9 +118,11 @@ Same method set as `ILattice`. Storage methods return `Promise`.
 |--------|-------------|
 | `Pipeline` | Sync sequencer-to-lattice ingest |
 | `AsyncPipeline` | Async sequencer-to-lattice ingest |
-| `GlobFileJob` | File glob ingest job |
-| `feedInputStream` | Feed sync lattice from async char stream |
-| `feedInputStreamAsync` | Feed async lattice from async char stream |
+| `GlobFileJob` | File glob ingest job (character stream) |
+| `feedInputStream` | Feed sync lattice from `AsyncGenerator<SequencerInput>` |
+| `feedInputStreamAsync` | Feed async lattice from `AsyncGenerator<SequencerInput>` |
+
+`IJob.input()` accepts any `AsyncGenerator<SequencerInput>`. Each yield is one token (string or sentinel), not necessarily one character.
 
 ## LZ sequencer
 

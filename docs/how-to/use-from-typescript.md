@@ -119,6 +119,8 @@ const sequencer = new Sequencer({
 });
 ```
 
+For non-text symbol streams (events, logs, sensors), see [Custom symbol streams](../tutorials/custom-symbol-streams.md) and [Ingest a custom token stream](../how-to/ingest-custom-token-stream.md).
+
 ## Manual lattice ingest
 
 Write segments and transitions directly.

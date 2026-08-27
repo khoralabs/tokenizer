@@ -14,6 +14,14 @@ For each input item:
 
 Segmentation is greedy and single-pass. The gate returns `true` from `evaluate()` while the extended prefix is known.
 
+## Discrete tokens and host symbols
+
+Each `push()` or generator yield accepts one `SequencerInput` string. A string can be one logical token (for example `svc:api`) or one character. Character-by-character feed is a convention in text helpers, not a library constraint.
+
+Hosts map domain objects to stable strings before feed. Delimiters and sentinels are host-defined. The library stores strings and builds graph nodes from ingested segment keys and sequence elements.
+
+See [Custom symbol streams](../tutorials/custom-symbol-streams.md) for discrete-token ingest.
+
 ## Dictionary
 
 The LZ gate uses an `IDictionary` implementation:

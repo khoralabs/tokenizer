@@ -76,6 +76,8 @@ Stdout contains a JSON array of token strings.
 
 ## Next steps
 
+- [Custom symbol streams](../tutorials/custom-symbol-streams.md) — discrete tokens, not character-by-character
+- [Log traces and symbol registries](../tutorials/log-traces-and-symbol-registries.md) — host symbol mapping and pre-segmented ingest
 - [Ingest a corpus](../how-to/ingest-a-corpus.md) — programmatic ingest with `Pipeline`
 - [Decode text](../how-to/decode-text.md) — Viterbi, beam, and compile options
 - [Use from TypeScript](../how-to/use-from-typescript.md) — backend and sync/async APIs

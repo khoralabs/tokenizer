@@ -74,7 +74,7 @@ See [CLI reference](docs/reference/cli.md) for flags.
 
 | Section | Path |
 |---------|------|
-| Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) |
+| Tutorials | [docs/tutorials/](docs/tutorials/) — [getting started](docs/tutorials/getting-started.md), [custom symbol streams](docs/tutorials/custom-symbol-streams.md), [log traces](docs/tutorials/log-traces-and-symbol-registries.md) |
 | How-to | [docs/how-to/](docs/how-to/) |
 | Explanation | [docs/explanation/](docs/explanation/) |
 | Reference | [docs/reference/](docs/reference/) |
