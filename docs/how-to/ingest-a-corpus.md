@@ -9,26 +9,35 @@ Ingest writes LZ sequencer segments and transition pairs into a lattice database
 
 ## CLI ingest
 
-Run ingest from the project root.
+Create `tkn.config.json` in your working directory:
+
+```json
+{
+  "lattice": { "backend": "sqlite", "path": ".tkn/lattice.db" },
+  "ingest": { "dictMax": 10000 },
+  "output": { "topK": 5 }
+}
+```
+
+Run ingest:
 
 ```bash
 bun run tokenizer ingest -f "corpus/**/*.txt"
 ```
 
-Optional flags:
+Optional flag overrides:
 
 ```bash
 bun run tokenizer ingest \
   -f "corpus/**/*.txt" \
   --db .tkn/lattice.db \
-  --backend sqlite \
   --dict-max 10000 \
   --cwd .
 ```
 
-Use `--backend turso` for the Turso backend. See [CLI reference](../reference/cli.md) for all flags.
+Set `lattice.backend` to `turso` in config for the Turso backend. See [CLI reference](../reference/cli.md) for all options.
 
-**Outcome:** stderr reports segment count and vocabulary size. The database file exists at the `--db` path.
+**Outcome:** stderr reports segment count, vocabulary size, and top patterns. The database file exists at the configured path (cwd-relative).
 
 ## Programmatic ingest (SQLite)
 

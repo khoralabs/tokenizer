@@ -54,25 +54,43 @@ console.log(tokenizer.getTopTokens(5));
 
 `feed()` runs the LZ sequencer and writes segments and transitions into the lattice.
 
-## Step 4 — Ingest files into a SQLite lattice
+## Step 4 — Configure and ingest into a SQLite lattice
 
-From the project root, run the ingest command on a text corpus.
+Create `tkn.config.json` in your working directory (or copy [tkn.config.example.json](../../tkn.config.example.json)):
+
+```json
+{
+  "lattice": { "backend": "sqlite", "path": ".tkn/lattice.db" }
+}
+```
+
+Run ingest on a text corpus from your working directory:
 
 ```bash
 bun run tokenizer ingest -f "corpus/**/*.txt"
 ```
 
-The command writes `.tkn/lattice.db` by default. It prints segment count and vocabulary size.
+The command writes the database path from config (default `.tkn/lattice.db`). It prints segment count, vocabulary size, and top patterns.
 
 ## Step 5 — Decode text with the CLI
-
-Run the decode command against the trained database.
 
 ```bash
 bun run tokenize --text "hello world"
 ```
 
-Stdout contains a JSON array of token strings.
+Or use the `tokenizer` subcommand:
+
+```bash
+bun run tokenizer tokenize --text "hello world"
+```
+
+Stdout contains a JSON array of token strings. Informational messages are suppressed by default; pass `--verbose` for lattice stats.
+
+Inspect top patterns:
+
+```bash
+bun run tokenizer topk -n 5
+```
 
 ## Next steps
 

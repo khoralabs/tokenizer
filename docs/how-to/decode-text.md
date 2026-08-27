@@ -9,11 +9,19 @@ Decode splits input text into token strings using a trained lattice.
 
 ## CLI decode (Viterbi)
 
+Ensure `tkn.config.json` points at your trained database, then:
+
 ```bash
 bun run tokenize --text "hello world"
 ```
 
-**Outcome:** stdout is a JSON array, for example `["he","llo"," wor","ld"]`.
+Equivalent via `tokenizer`:
+
+```bash
+bun run tokenizer tokenize --text "hello world"
+```
+
+**Outcome:** stdout is a JSON array, for example `["he","llo"," wor","ld"]`. Stderr is quiet by default; add `--verbose` for lattice stats.
 
 Other input sources:
 
@@ -21,6 +29,8 @@ Other input sources:
 bun run tokenize -f input.txt
 echo "hello world" | bun run tokenize
 ```
+
+Decoder settings (`decoder`, `beamWidth`) live in `tkn.config.json` under `decode`, or override with flags:
 
 ## CLI decode (beam)
 

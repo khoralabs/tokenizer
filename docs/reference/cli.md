@@ -1,6 +1,41 @@
 # CLI reference
 
-Two binaries: `tokenizer` (ingest) and `tokenize` (decode).
+Two binaries: `tokenizer` (ingest, tokenize, topk) and `tokenize` (decode).
+
+Configuration comes from `tkn.config.json` in the caller working directory, or from the path in `TKN_CONFIG`. Simple flags can override individual settings.
+
+## Configuration
+
+Default file: `tkn.config.json` (cwd-relative).
+
+Environment override: `TKN_CONFIG=/path/to/config.json`
+
+Example:
+
+```json
+{
+  "lattice": {
+    "backend": "sqlite",
+    "path": ".tkn/lattice.db"
+  },
+  "ingest": { "dictMax": 10000 },
+  "decode": { "decoder": "viterbi", "beamWidth": 32 },
+  "output": { "topK": 5 }
+}
+```
+
+| Section | Fields | Notes |
+|---------|--------|-------|
+| `lattice.backend` | `sqlite` or `turso` | Not available as a CLI flag |
+| `lattice.path` | string | Database file or Turso URL; override with `--db` |
+| `ingest.dictMax` | number | LZ dictionary capacity; override with `--dict-max` |
+| `decode.decoder` | `viterbi` or `beam` | Override with `--decoder` |
+| `decode.beamWidth` | number | Override with `--beam-width` |
+| `output.topK` | number (max 100) | Default top-k for ingest summary and `tokenizer topk` |
+
+See [tkn.config.example.json](../../tkn.config.example.json) in the repository root.
+
+Path flags (`--db`, `--cwd`, `--file`) resolve relative to the **caller working directory**, not the package install location.
 
 ## `tokenizer`
 
@@ -9,74 +44,103 @@ Bin name: `tokenizer`
 
 ### Subcommands
 
-| Subcommand | Status |
+| Subcommand | Action |
 |------------|--------|
-| `ingest` | Implemented |
-| `tokenize` | Not implemented — use the `tokenize` binary |
+| `ingest` | Ingest files into a lattice database |
+| `tokenize` | Decode text (same flags as `tokenize` bin) |
+| `topk` | Print vocabulary size and top hub-scored patterns |
 
-The help text references `tokenizer tokenize`. That subcommand exits with usage output.
+Global flags:
+
+- `-h`, `--help` — show usage (exit 0)
+- `--version` — print package version
 
 ### `tokenizer ingest`
 
-Ingest files into a lattice database.
-
 ```bash
-bun run tokenizer ingest -f <glob> [options]
+tokenizer ingest -f <glob> [options]
 ```
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--files` | `-f` | (required) | Glob of files to ingest |
-| `--db` | | `.tkn/lattice.db` | Database path (relative to project root) |
-| `--backend` | | `sqlite` | `sqlite` or `turso` |
-| `--dict-max` | | `10000` | Bounded LZ dictionary capacity |
-| `--cwd` | | project root | Directory for glob resolution |
+| `--db` | | from config | Override `lattice.path` |
+| `--dict-max` | | from config | Override `ingest.dictMax` |
+| `--cwd` | | `.` | Directory for glob resolution (cwd-relative) |
 | `--help` | `-h` | | Show usage |
 
 Exit code `1` when zero segments are emitted.
+
+### `tokenizer tokenize`
+
+Same options as the `tokenize` binary. See below.
+
+### `tokenizer topk`
+
+```bash
+tokenizer topk [options]
+```
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--db` | | from config | Override `lattice.path` |
+| `--limit` | `-n` | from `output.topK` | Max patterns to print (capped at 100) |
+| `--format` | | `human` | `human` or `json` |
+| `--help` | `-h` | | Show usage |
+
+Human output:
+
+```
+1234 patterns
+"hello": 0.8421
+```
+
+JSON output includes only the top K patterns, never the full vocabulary.
 
 ## `tokenize`
 
 Entry: `scripts/tokenize.ts`  
 Bin name: `tokenize`
 
-Decode text using a trained lattice.
+Decode text using a trained lattice. No subcommands — flags only.
 
 ```bash
-bun run tokenize [options]
+tokenize [options]
 ```
+
+Global:
+
+- `--version` — print package version
 
 ### Input (one required)
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--text` | `-t` | Text to decode |
-| `--file` | `-f` | Read text from file |
+| `--file` | `-f` | Read text from file (cwd-relative) |
 | stdin pipe | | Used when stdin is not a TTY |
 
 ### Lattice
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--db` | `.tkn/lattice.db` | Database path |
-| `--backend` | `sqlite` | `sqlite` or `turso` |
+| `--db` | from config | Override `lattice.path` |
 
 ### Decoder
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--decoder` | `viterbi` | `viterbi` or `beam` |
-| `--beam-width` | `32` | Beam width when `--decoder beam` |
+| `--decoder` | from config | `viterbi` or `beam` |
+| `--beam-width` | from config | Beam width when `--decoder beam` |
 
 ### Output
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--format` | | `json` | `json` (array on stdout) or `lines` (one token per line) |
-| `--verbose` | `-v` | off | Print stats to stderr |
+| `--quiet` | `-q` | on unless `--verbose` | Suppress informational stderr |
+| `--verbose` | `-v` | off | Print lattice stats to stderr |
 | `--help` | `-h` | | Show usage |
-
-Database path and pattern count print to stderr on every run.
 
 Errors:
 

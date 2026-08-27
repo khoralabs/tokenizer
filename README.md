@@ -14,7 +14,7 @@ Online pattern discovery and lattice-backed decoding for sequential text.
 
 ## Background
 
-The npm package is `@khoralabs/tkn`. The repository folder is `tokenizer`.
+The npm package is `@khoralabs/tkn`.
 
 tkn discovers segments in sequential input through an LZ-style dictionary gate. The gate grows a prefix while the extended pattern is in the dictionary. The gate emits a segment when the extended pattern is not in the dictionary.
 
@@ -61,14 +61,16 @@ See [Getting started](docs/tutorials/getting-started.md) for a full walkthrough.
 
 ## CLI
 
+Configure lattice backend and defaults in `tkn.config.json` (or set `TKN_CONFIG`). Copy [tkn.config.example.json](./tkn.config.example.json) as a starting point.
+
 | Command | Action |
 |---------|--------|
 | `tokenizer ingest` | Ingest files into a lattice database |
+| `tokenizer tokenize` | Decode text (same as `tokenize` bin) |
+| `tokenizer topk` | Print vocabulary size and top hub-scored patterns |
 | `tokenize` | Decode text against a trained lattice database |
 
-Decode uses the `tokenize` binary. The `tokenizer` binary implements `ingest` only. The `tokenizer` help text references `tokenizer tokenize`, but that subcommand is not implemented.
-
-See [CLI reference](docs/reference/cli.md) for flags.
+See [CLI reference](docs/reference/cli.md) for configuration, flags, and examples.
 
 ## Documentation
 
