@@ -1,0 +1,16 @@
+{
+  "lattice": {
+    "backend": "sqlite",
+    "path": ".tkn/lattice.db"
+  },
+  "ingest": {
+    "dictMax": 10000
+  },
+  "decode": {
+    "decoder": "viterbi",
+    "beamWidth": 32
+  },
+  "output": {
+    "topK": 5
+  }
+}
