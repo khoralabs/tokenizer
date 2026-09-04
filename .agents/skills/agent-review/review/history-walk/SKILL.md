@@ -16,7 +16,7 @@ Read-only historical evaluation. The CLI reviews every commit in `from..to`
 
 ## When to use
 
-- Postmortem / "what would review have caught on these commits?"
+- Postmortem / “what would review have caught on these commits?”
 - Comparing review-on-commit vs later fixes
 - Mining recurring `key`s for future coding-agent skills
 

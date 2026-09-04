@@ -79,7 +79,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
-    "@khoralabs/agent-review": "0.2.0",
+    "@khoralabs/agent-review": "0.2.2",
     "@types/bun": "latest",
     "@types/parse-gitignore": "^1.0.2",
     "husky": "^9.1.7",
