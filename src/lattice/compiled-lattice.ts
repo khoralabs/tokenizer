@@ -58,15 +58,16 @@ export function buildLmTables(
     transitionLogProb.set(transitionKey(from, to), bigramLogProb(weight, fromTotal, lmStats));
   }
 
-  const defaultTransition = bigramLogProb(0, 0, lmStats);
-
   return {
     emissionLogProb(token) {
       return emissionLogProb.get(token) ?? defaultEmission;
     },
     transitionLogProb(from, to) {
       if (from === null) return 0;
-      return transitionLogProb.get(transitionKey(from, to)) ?? defaultTransition;
+      return (
+        transitionLogProb.get(transitionKey(from, to)) ??
+        bigramLogProb(0, outgoingTotals.get(from) ?? 0, lmStats)
+      );
     },
   };
 }
