@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { AhoCorasick } from "./aho-corasick";
+import { atomsFromText } from "./atom";
 
 function bruteForceMatches(patterns: string[], text: string, offset: number) {
   const matches: { pattern: string; length: number }[] = [];
@@ -16,7 +17,7 @@ describe("AhoCorasick", () => {
     const patterns = ["he", "llo", "hello", "a", "ab", "b", "c"];
     const ac = new AhoCorasick(patterns);
     const text = "hello abc";
-    const byStart = ac.matchStarts(text);
+    const byStart = ac.matchStarts(atomsFromText(text));
 
     for (let offset = 0; offset < text.length; offset++) {
       const fromAc = byStart[offset] ?? [];
@@ -29,7 +30,7 @@ describe("AhoCorasick", () => {
 
   test("finds overlapping patterns at one offset", () => {
     const ac = new AhoCorasick(["a", "ab", "abc"]);
-    const atZero = ac.matchStarts("abc")[0] ?? [];
+    const atZero = ac.matchStarts(atomsFromText("abc"))[0] ?? [];
     expect(atZero.map((m) => m.pattern).sort()).toEqual(["a", "ab", "abc"]);
   });
 });

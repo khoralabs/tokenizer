@@ -94,11 +94,11 @@ export class Lattice implements IAsyncLattice {
   }
 
   async compile(): Promise<ICompiledLattice> {
-    const [patterns, lm] = await Promise.all([
-      this.trie.listTerminalPatterns(),
+    const [entries, lm] = await Promise.all([
+      this.trie.listTerminalEntries(),
       this.graph.buildLmTables(),
     ]);
-    return compilePatterns(patterns, lm);
+    return compilePatterns(entries, lm);
   }
 
   invalidateCompiled(): void {

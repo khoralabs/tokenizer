@@ -10,7 +10,7 @@ export const TrieNodeSchema = Type.Object({
   id: positiveInteger,
   parent_id: nullablePositiveInteger,
   parent_key: Type.Integer(),
-  char: Type.String({ minLength: 1, maxLength: 1 }),
+  char: Type.String({ minLength: 1 }),
   pattern: nullableString,
   terminal: Type.Integer({ minimum: 0, maximum: 1 }),
   markov_id: nullablePositiveInteger,
@@ -19,7 +19,7 @@ export const TrieNodeSchema = Type.Object({
 export const TrieNodeInsertSchema = Type.Object({
   parent_id: nullablePositiveInteger,
   parent_key: Type.Integer(),
-  char: Type.String({ minLength: 1, maxLength: 1 }),
+  char: Type.String({ minLength: 1 }),
   terminal: Type.Integer({ minimum: 0, maximum: 1 }),
   pattern: Type.Optional(nullableString),
   markov_id: Type.Optional(nullablePositiveInteger),

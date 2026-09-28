@@ -93,7 +93,7 @@ export class Lattice implements ILattice {
   }
 
   compile(): ICompiledLattice {
-    return compilePatterns(this.trie.listTerminalPatterns(), this.graph.buildLmTables());
+    return compilePatterns(this.trie.listTerminalEntries(), this.graph.buildLmTables());
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {

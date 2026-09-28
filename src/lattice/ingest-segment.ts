@@ -9,9 +9,11 @@ export function ingestSegment(graph: IGraph, trie: ITrie, segment: LatticeSegmen
   for (const element of segment.sequence) {
     graph.getOrCreateNode(element);
     graph.recordEmission(element);
-    trie.merge(element, markovId);
+    trie.merge([element], element, markovId);
   }
-  trie.merge(segment.key, markovId);
+  if (segment.sequence.length > 0) {
+    trie.merge(segment.sequence, segment.key, markovId);
+  }
 }
 
 export function ingestSegmentBatch(graph: IGraph, trie: ITrie, segments: LatticeSegment[]): void {
@@ -26,7 +28,7 @@ export type AsyncGraph = {
 };
 
 export type AsyncTrie = {
-  merge(pattern: string, markov_id: number): Promise<number>;
+  merge(atoms: readonly string[], pattern: string, markov_id: number): Promise<number>;
 };
 
 export async function ingestSegmentAsync(
@@ -39,9 +41,11 @@ export async function ingestSegmentAsync(
   for (const element of segment.sequence) {
     await graph.getOrCreateNode(element);
     await graph.recordEmission(element);
-    await trie.merge(element, markovId);
+    await trie.merge([element], element, markovId);
   }
-  await trie.merge(segment.key, markovId);
+  if (segment.sequence.length > 0) {
+    await trie.merge(segment.sequence, segment.key, markovId);
+  }
 }
 
 export async function ingestSegmentBatchAsync(

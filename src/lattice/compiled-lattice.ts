@@ -1,4 +1,6 @@
 import { AhoCorasick } from "./aho-corasick";
+import type { Atom, TerminalEntry } from "./atom";
+import { atomsFromText } from "./atom";
 import { bigramLogProb, DEFAULT_LM_SMOOTHING, type LmStats, unigramLogProb } from "./lm";
 import {
   createAsyncViterbiContext,
@@ -12,7 +14,11 @@ import {
 /** Compiled decode index: Aho-Corasick vocabulary + precomputed LM scores. */
 export interface ICompiledLattice {
   readonly patternCount: number;
+  readonly patterns: readonly string[];
+  /** Scan a character-atom source (UTF-16 code units). */
   scan(text: string): MatchCandidate[][];
+  /** Scan an explicit atom source (symbol / byte feeds). */
+  scanAtoms(source: readonly Atom[]): MatchCandidate[][];
   emissionLogProb(token: string): number;
   transitionLogProb(from: string | null, to: string): number;
 }
@@ -27,9 +33,22 @@ export type LmTables = {
 
 export type LmEdge = { from: string; to: string; weight: number };
 
+export type LmCompileOptions = {
+  smoothing?: number;
+};
+
+function resolveSmoothing(options?: LmCompileOptions): number {
+  const smoothing = options?.smoothing ?? DEFAULT_LM_SMOOTHING;
+  if (!Number.isFinite(smoothing) || smoothing <= 0) {
+    throw new RangeError(`smoothing must be finite and > 0, got ${smoothing}`);
+  }
+  return smoothing;
+}
+
 export function buildLmTables(
   tokenCounts: ReadonlyMap<string, number>,
   edges: readonly LmEdge[],
+  options?: LmCompileOptions,
 ): LmTables {
   let totalEmissions = 0;
   for (const count of tokenCounts.values()) totalEmissions += count;
@@ -37,7 +56,7 @@ export function buildLmTables(
   const lmStats: LmStats = {
     totalEmissions,
     vocabSize: tokenCounts.size,
-    smoothing: DEFAULT_LM_SMOOTHING,
+    smoothing: resolveSmoothing(options),
   };
 
   const emissionLogProb = new Map<string, number>();
@@ -72,12 +91,21 @@ export function buildLmTables(
   };
 }
 
-export function compilePatterns(patterns: string[], lm: LmTables): ICompiledLattice {
-  const matcher = new AhoCorasick(patterns);
+export function compilePatterns(
+  patterns: readonly TerminalEntry[] | readonly string[],
+  lm: LmTables,
+): ICompiledLattice {
+  const entries: TerminalEntry[] = [...patterns].map((entry) =>
+    typeof entry === "string" ? { pattern: entry, atoms: atomsFromText(entry) } : entry,
+  );
+  const snapshot = Object.freeze(entries.map((e) => e.pattern));
+  const matcher = new AhoCorasick(entries);
 
   return {
-    patternCount: patterns.length,
-    scan: (text) => matcher.matchStarts(text),
+    patternCount: snapshot.length,
+    patterns: snapshot,
+    scan: (text) => matcher.matchStarts(atomsFromText(text)),
+    scanAtoms: (source) => matcher.matchStarts(source),
     emissionLogProb: lm.emissionLogProb,
     transitionLogProb: lm.transitionLogProb,
   };

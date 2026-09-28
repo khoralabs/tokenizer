@@ -1,4 +1,5 @@
 export * from "./lattice/aho-corasick";
+export * from "./lattice/atom";
 export * from "./lattice/compiled-lattice";
 export * from "./lattice/lattice";
 export * from "./lattice/pattern-vocabulary";
