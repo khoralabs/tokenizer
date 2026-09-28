@@ -11,6 +11,11 @@ export interface ISequencerConfig<TGates extends IGate[] = IGate[]> {
   name?: string;
   gates: TGates;
   queue: IQueue;
+  /**
+   * Optional delimiter inserted between atoms when composing pattern keys.
+   * Default "" preserves historical string concatenation.
+   */
+  atomDelimiter?: string;
 }
 
 export interface ISequencerSnapshot {
@@ -73,16 +78,18 @@ export class Sequencer<TGates extends IGate[] = IGate[]> implements ISequencer {
   private _timeStart = 0;
   readonly _gates: TGates;
   private _queue: IQueue;
-  constructor({ name, gates, queue }: ISequencerConfig<TGates>) {
+  private _atomDelimiter: string;
+  constructor({ name, gates, queue, atomDelimiter = "" }: ISequencerConfig<TGates>) {
     this._name = name ?? this.constructor.name;
     this._gates = gates ?? [];
     this._queue = queue;
+    this._atomDelimiter = atomDelimiter;
   }
 
   private _ongoingSequence: SequencerInput[] = [];
   private _ongoingKey: Key = "";
   push: ISequencer["push"] = (input) => {
-    const result = Sequencer.evaluate(this._ongoingKey, input, this._gates);
+    const result = Sequencer.evaluate(this._ongoingKey, input, this._gates, this._atomDelimiter);
 
     // Sequencer.evaluate produces a key internally and returns it in either continue or reset
     // We set _ongoingKey, which will be used in the the next push call, depending on the shape of the output.
@@ -112,8 +119,9 @@ export class Sequencer<TGates extends IGate[] = IGate[]> implements ISequencer {
     previous: Key,
     input: SequencerInput,
     gates: IGate[],
+    atomDelimiter = "",
   ): { reset: string; emit?: string } | { continue: string } {
-    const current = `${previous}${input}`;
+    const current = previous === "" ? input : `${previous}${atomDelimiter}${input}`;
     for (let index = 0; index < gates.length; index++) {
       // Continue as long as the gate passes
       if (gates[index]?.evaluate(current, previous)) continue;
