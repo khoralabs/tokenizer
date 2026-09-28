@@ -29,16 +29,21 @@ export interface ISequencer {
    */
   push(input: SequencerInput): void;
   /**
-   * Flushes the current candidate to the queue and waits for async drain to complete.
-   * This ensures all patterns have been processed by active readers.
+   * Emit the remaining candidate buffer (if any), clear candidate state, and wait for
+   * async drain. Preserves the shared gate dictionary.
    */
   flush(): Promise<void>;
+  /**
+   * Sequence boundary: flush pending output and clear candidate state while preserving
+   * the shared gate dictionary. Use between independent feeds that share learning.
+   */
+  endSequence(): Promise<void>;
   /**
    * Flushes and closes the sequencer, signaling to readers that no more data is coming.
    */
   close(): Promise<void>;
   /**
-   * Resets all internal state
+   * Discard the current candidate without emitting and clear gate dictionaries.
    */
   reset(): void;
   /**
@@ -134,8 +139,13 @@ export class Sequencer<TGates extends IGate[] = IGate[]> implements ISequencer {
         key: this._ongoingKey,
       });
     }
+    this._ongoingKey = "";
     // Yield to event loop to allow async drain to active readers
     await Promise.resolve();
+  };
+
+  endSequence: ISequencer["endSequence"] = async () => {
+    return this.flush();
   };
 
   close: ISequencer["close"] = async () => {
@@ -145,6 +155,7 @@ export class Sequencer<TGates extends IGate[] = IGate[]> implements ISequencer {
 
   reset: ISequencer["reset"] = () => {
     this._ongoingSequence = [];
+    this._ongoingKey = "";
     this._timeStart = 0;
     this._gates.forEach((gate) => void gate.reset());
   };

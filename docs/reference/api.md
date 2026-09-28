@@ -44,9 +44,10 @@ Returns `Sequencer<LZGate[]>`.
 | Member | Type | Description |
 |--------|------|-------------|
 | `push(input)` | `(SequencerInput) => void` | Process one input item |
-| `flush()` | `() => Promise<void>` | Emit remaining buffer |
+| `flush()` | `() => Promise<void>` | Emit remaining buffer and clear candidates; keep dictionary |
+| `endSequence()` | `() => Promise<void>` | Sequence boundary: flush + clear candidates; keep dictionary |
 | `close()` | `() => Promise<void>` | Flush and close readers |
-| `reset()` | `() => void` | Clear state |
+| `reset()` | `() => void` | Discard candidates and clear gate dictionaries |
 | `snapshot()` | `() => Promise<ISequencerSnapshot[]>` | Gate snapshots |
 | `read()` | `AsyncGenerator<SequencerOutput>` | Read queued segments |
 | `drainPending()` | `() => SequencerOutput[]` | Move pending outputs to history |

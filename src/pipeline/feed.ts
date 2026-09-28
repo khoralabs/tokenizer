@@ -150,7 +150,7 @@ export async function feedInputStream(
     sequencer.push(input);
     processOutputs(lattice, sequencer.drainPending(), state, batchSize);
   }
-  await sequencer.flush();
+  await sequencer.endSequence();
   processOutputs(lattice, sequencer.drainPending(), state, batchSize);
   flushFeedBatch(lattice, state, batchSize);
 }
@@ -166,7 +166,7 @@ export async function feedInputStreamAsync(
     sequencer.push(input);
     await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
   }
-  await sequencer.flush();
+  await sequencer.endSequence();
   await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
   await flushFeedBatchAsync(lattice, state, batchSize);
 }
