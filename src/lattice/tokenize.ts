@@ -205,6 +205,12 @@ async function runBigramDecodeAsync(
   return reconstructTokens(layers, n, text);
 }
 
+function assertPositiveIntegerBeamWidth(beamWidth: number): void {
+  if (!Number.isInteger(beamWidth) || beamWidth <= 0) {
+    throw new RangeError(`beamWidth must be a positive integer, got ${beamWidth}`);
+  }
+}
+
 export function decode(
   text: string,
   ctx: ViterbiContext,
@@ -239,6 +245,7 @@ export async function viterbiDecodeAsync(
 }
 
 export function beamDecode(text: string, ctx: ViterbiContext, beamWidth: number): string[] {
+  assertPositiveIntegerBeamWidth(beamWidth);
   return runBigramDecode(text, ctx, { beamWidth });
 }
 
@@ -247,6 +254,7 @@ export async function beamDecodeAsync(
   ctx: AsyncViterbiContext,
   beamWidth: number,
 ): Promise<string[]> {
+  assertPositiveIntegerBeamWidth(beamWidth);
   return runBigramDecodeAsync(text, ctx, { beamWidth });
 }
 

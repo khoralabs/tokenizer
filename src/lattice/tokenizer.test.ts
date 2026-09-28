@@ -201,6 +201,14 @@ describe("beamDecode", () => {
     const ctx = abcBigramContext();
     expect(decode("abc", ctx, { mode: "beam", beamWidth: 1000 })).toEqual(["a", "b", "c"]);
   });
+
+  test("rejects non-positive or non-integer beamWidth", () => {
+    const ctx = abcBigramContext();
+    expect(() => beamDecode("abc", ctx, 0)).toThrow(RangeError);
+    expect(() => beamDecode("abc", ctx, -1)).toThrow(RangeError);
+    expect(() => beamDecode("abc", ctx, 1.5)).toThrow(RangeError);
+    expect(() => decode("abc", ctx, { mode: "beam", beamWidth: 0 })).toThrow(RangeError);
+  });
 });
 
 describe("memory lattice tokenize", () => {

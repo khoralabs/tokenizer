@@ -11,4 +11,10 @@ describe("lm", () => {
   test("bigram favors observed transitions", () => {
     expect(bigramLogProb(20, 20, stats)).toBeGreaterThan(bigramLogProb(0, 20, stats));
   });
+
+  test("empty vocabulary uses log(1 / smoothing)", () => {
+    const empty = { totalEmissions: 0, vocabSize: 0, smoothing: 0.1 };
+    expect(unigramLogProb(0, empty)).toBe(Math.log(1 / 0.1));
+    expect(bigramLogProb(0, 0, empty)).toBe(Math.log(1 / 0.1));
+  });
 });
