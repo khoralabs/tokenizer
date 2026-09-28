@@ -261,14 +261,11 @@ function runIndexedDecode(context: IndexedDecodeContext, options?: DecodeRunOpti
     if (!layer || layer.scores.size === 0) continue;
     if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
 
+    const candidates = resolveCandidates(context.matchCandidates(i), context.fallbackCandidate(i));
+    if (candidates.length === 0) continue;
+
     for (const [prevToken, baseScore] of layer.scores) {
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
-
-      const candidates = resolveCandidates(
-        context.matchCandidates(i),
-        context.fallbackCandidate(i),
-      );
-      if (candidates.length === 0) continue;
 
       extendIndexed(
         n,
@@ -307,14 +304,14 @@ async function runIndexedDecodeAsync(
     if (!layer || layer.scores.size === 0) continue;
     if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
 
+    const candidates = resolveCandidates(
+      await context.matchCandidates(i),
+      await context.fallbackCandidate(i),
+    );
+    if (candidates.length === 0) continue;
+
     for (const [prevToken, baseScore] of layer.scores) {
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
-
-      const candidates = resolveCandidates(
-        await context.matchCandidates(i),
-        await context.fallbackCandidate(i),
-      );
-      if (candidates.length === 0) continue;
 
       await extendIndexedAsync(
         n,
