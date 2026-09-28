@@ -182,7 +182,7 @@ export class Graph implements IGraph {
     return row?.total ?? 0;
   }
 
-  buildLmTables(): LmTables {
+  buildLmTables(options?: import("../../compiled-lattice").LmCompileOptions): LmTables {
     const tokenCounts = new Map<string, number>();
     if (this.selectAllTokenCounts) {
       for (const row of this.selectAllTokenCounts.all()) {
@@ -194,6 +194,6 @@ export class Graph implements IGraph {
       to: row.to_token,
       weight: row.weight,
     }));
-    return buildLmTables(tokenCounts, edges);
+    return buildLmTables(tokenCounts, edges, options);
   }
 }

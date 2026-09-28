@@ -1,7 +1,13 @@
 import { Database } from "bun:sqlite";
-import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiled,
+} from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
@@ -92,8 +98,15 @@ export class Lattice implements ILattice {
     this.maybeCheckpoint();
   }
 
-  compile(): ICompiledLattice {
-    return compilePatterns(this.trie.listTerminalEntries(), this.graph.buildLmTables());
+  compile(options?: LmCompileOptions): ICompiledLattice {
+    const compiled = compilePatterns(
+      this.trie.listTerminalEntries(),
+      this.graph.buildLmTables(options),
+    );
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiledLattice = compiled;
+    }
+    return compiled;
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {

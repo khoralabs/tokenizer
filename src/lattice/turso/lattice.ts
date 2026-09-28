@@ -1,6 +1,12 @@
-import { compilePatterns, type ICompiledLattice, tokenizeCompiledAsync } from "../compiled-lattice";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiledAsync,
+} from "../compiled-lattice";
 import { ingestSegmentBatchAsync } from "../ingest-segment";
 import type { IAsyncLattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
@@ -93,12 +99,16 @@ export class Lattice implements IAsyncLattice {
     await this.maybeCheckpoint();
   }
 
-  async compile(): Promise<ICompiledLattice> {
+  async compile(options?: LmCompileOptions): Promise<ICompiledLattice> {
     const [entries, lm] = await Promise.all([
       this.trie.listTerminalEntries(),
-      this.graph.buildLmTables(),
+      this.graph.buildLmTables(options),
     ]);
-    return compilePatterns(entries, lm);
+    const compiled = compilePatterns(entries, lm);
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiledLattice = compiled;
+    }
+    return compiled;
   }
 
   invalidateCompiled(): void {

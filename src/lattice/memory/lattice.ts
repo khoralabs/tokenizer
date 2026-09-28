@@ -1,6 +1,12 @@
-import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiled,
+} from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import { PatternVocabulary } from "../pattern-vocabulary";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
@@ -47,8 +53,15 @@ export class Lattice implements ILattice {
     this.merge(pairs);
   }
 
-  compile(): ICompiledLattice {
-    return compilePatterns(this.patterns.listTerminalEntries(), this.graph.buildLmTables());
+  compile(options?: LmCompileOptions): ICompiledLattice {
+    const compiled = compilePatterns(
+      this.patterns.listTerminalEntries(),
+      this.graph.buildLmTables(options),
+    );
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiled = compiled;
+    }
+    return compiled;
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {

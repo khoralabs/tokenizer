@@ -1,4 +1,4 @@
-import type { ICompiledLattice } from "./compiled-lattice";
+import type { ICompiledLattice, LmCompileOptions } from "./compiled-lattice";
 import type { LatticeSegment } from "./segment";
 import type { LatticeDecodeOptions } from "./tokenize";
 
@@ -55,8 +55,9 @@ export interface ILattice {
 
   /**
    * Build an in-memory decode index (Aho-Corasick + LM tables) from persisted state.
+   * Non-default smoothing returns an uncached snapshot.
    */
-  compile(): ICompiledLattice;
+  compile(options?: LmCompileOptions): ICompiledLattice;
 
   /** Drop cached compiled lattice after ingest or merge. */
   invalidateCompiled(): void;
@@ -100,7 +101,7 @@ export interface IAsyncLattice {
   ingestBatch(segments: LatticeSegment[]): Promise<void>;
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): Promise<void>;
   tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]>;
-  compile(): Promise<ICompiledLattice>;
+  compile(options?: LmCompileOptions): Promise<ICompiledLattice>;
   invalidateCompiled(): void;
   vocabulary(): Promise<string[]>;
   pipe(
