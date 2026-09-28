@@ -1,5 +1,6 @@
 import { createLZSequencer } from "../lz-sequencer";
 import { createFeedState, feedInputStream, feedInputStreamAsync } from "../pipeline/feed";
+import { feedCharacters } from "../pipeline/feeds";
 import type { Sequencer } from "../sequencer";
 import type { IAsyncLattice, ILattice } from "./lattice";
 import type { LatticeDecodeOptions } from "./tokenize";
@@ -33,10 +34,7 @@ export function createLatticeTokenizer(
 
   return {
     async feed(text: string) {
-      async function* source() {
-        for (const char of text) yield char;
-      }
-      await feedInputStream(lattice, sequencer, source(), feedState, batchSize);
+      await feedInputStream(lattice, sequencer, feedCharacters(text), feedState, batchSize);
     },
 
     tokenize(text: string, options?: LatticeDecodeOptions) {
@@ -63,10 +61,7 @@ export function createAsyncLatticeTokenizer(
 
   return {
     async feed(text: string) {
-      async function* source() {
-        for (const char of text) yield char;
-      }
-      await feedInputStreamAsync(lattice, sequencer, source(), feedState, batchSize);
+      await feedInputStreamAsync(lattice, sequencer, feedCharacters(text), feedState, batchSize);
     },
 
     async tokenize(text: string, options?: LatticeDecodeOptions) {
