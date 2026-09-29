@@ -18,10 +18,11 @@ type Atom = string;
 
 type TerminalEntry = { pattern: string; atoms: readonly Atom[] };
 
-type LatticeSegment = { key: string; sequence: string[] };
+type LatticeSegment = { key: string; sequence: Atom[] };
 
-type SequencerInput = string | `<${number}>`;
-type SequencerOutput = { sequence: SequencerInput[]; key: string };
+/** Alias of `Atom` (includes sentinel-shaped strings like `<0>`). */
+type SequencerInput = Atom;
+type SequencerOutput = { sequence: Atom[]; key: string };
 
 type MatchCandidate = { pattern: string; length: number };
 

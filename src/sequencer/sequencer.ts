@@ -1,11 +1,15 @@
+import type { Atom } from "../lattice/atom";
 import type { IGate, IGateSnapshot } from "./gate";
 import type { IQueue } from "./queue/queue";
 
-export type Value = string;
+/** @deprecated Prefer `Atom` — same type (`string`). */
+export type Value = Atom;
+/** Sentinel-shaped atom (`<number>`); still typed as `Atom` at the stream boundary. */
 export type Sentinel = `<${number}>`;
 export type Key = string;
-export type SequencerInput = Value | Sentinel;
-export type SequencerOutput = { sequence: SequencerInput[]; key: Key };
+/** One stream unit; alias of lattice `Atom` (includes sentinel-shaped strings). */
+export type SequencerInput = Atom;
+export type SequencerOutput = { sequence: Atom[]; key: Key };
 
 export interface ISequencerConfig<TGates extends IGate[] = IGate[]> {
   name?: string;

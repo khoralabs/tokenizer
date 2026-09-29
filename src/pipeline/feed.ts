@@ -21,7 +21,7 @@ export function createFeedState(): FeedState {
 }
 
 function toSegment(output: SequencerOutput): LatticeSegment {
-  return { key: output.key, sequence: output.sequence as string[] };
+  return { key: output.key, sequence: output.sequence };
 }
 
 function transitionKey(from: string, to: string): string {
