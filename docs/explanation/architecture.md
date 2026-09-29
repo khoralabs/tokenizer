@@ -6,18 +6,20 @@ Component layout and data flow from ingest to token output.
 
 ```
 ┌─────────────┐     segments      ┌──────────────────────────────────┐
-│ LZ Sequencer│ ────────────────► │ Lattice (persisted or in-memory) │
+│ Atom feed   │                   │                                  │
+│ → Sequencer │ ────────────────► │ Lattice (persisted or in-memory) │
 │ + Pipeline  │   key + sequence  │  • Graph: transitions + counts   │
-└─────────────┘                   │  • Vocab: pattern strings          │
+└─────────────┘                   │  • Vocab / trie: atom edges      │
                                   └──────────────┬───────────────────┘
                                                  │ compile()
                                                  ▼
                                   ┌──────────────────────────────────┐
                                   │ ICompiledLattice                   │
-                                  │  • Aho-Corasick pattern scan       │
+                                  │  • Aho-Corasick over atoms         │
+                                  │  • patterns, scan / scanAtoms      │
                                   │  • Precomputed LM log-probs        │
                                   └──────────────┬───────────────────┘
-                                                 │ tokenize()
+                                                 │ tokenize / decodeIndexed
                                                  ▼
                                   ┌──────────────────────────────────┐
                                   │ Viterbi or beam decode             │
@@ -26,9 +28,13 @@ Component layout and data flow from ingest to token output.
 
 ## Components
 
+### Atom feeds
+
+`feedCharacters`, `feedBytes`, and `feedSymbols` produce `AsyncGenerator<SequencerInput>`. The feed chooses the lattice matcher alphabet. Pass feeds to `feedInputStream` / `feedInputStreamAsync` or wrap them in an `IJob` for `Pipeline`.
+
 ### Sequencer
 
-The sequencer accepts sequential input one item at a time. Gates decide whether the current prefix continues or segments. Emitted segments go to a queue. Consumers read segments through `read()`.
+The sequencer accepts sequential input one atom at a time. Gates decide whether the current prefix continues or segments. Optional `atomDelimiter` joins multi-atom pattern keys. Emitted segments go to a queue. Consumers read segments through `read()`.
 
 `createLZSequencer` builds a sequencer with one `LZGate` and a default queue.
 
@@ -41,23 +47,24 @@ The sequencer accepts sequential input one item at a time. Gates decide whether 
 The lattice stores:
 
 - **Graph** — pattern keys as nodes, weighted transitions as edges
-- **Vocabulary** — pattern strings linked to graph nodes
+- **Vocabulary / trie** — pattern strings with one edge per feed atom
 
-Ingest writes `LatticeSegment` values `{ key, sequence }`. Merge records transitions between consecutive pattern keys.
+Ingest writes `LatticeSegment` values `{ key, sequence }`. Merge records transitions between consecutive pattern keys. Trie merge follows `sequence`, not UTF-16 splits of `key`.
 
 ### Compiled index
 
-`compile()` reads persisted or in-memory state and builds `ICompiledLattice`:
+`compile(options?)` reads persisted or in-memory state and builds `ICompiledLattice`:
 
-- An Aho-Corasick automaton over vocabulary patterns
-- Precomputed unigram emission log-probabilities
-- Precomputed bigram transition log-probabilities
+- An Aho-Corasick automaton over vocabulary atom paths
+- `patterns` — terminal pattern keys from compile
+- `scan(text)` / `scanAtoms(source)` — match candidates per offset
+- Precomputed unigram emission and bigram transition log-probabilities
 
-Each backend implements its own `compile()` logic. Decoding always uses the abstract `ICompiledLattice` interface.
+Default LM smoothing is cached. Non-default `LmCompileOptions.smoothing` returns an uncached snapshot. Each backend implements its own `compile()` logic. Decoding always uses the abstract `ICompiledLattice` interface.
 
 ### Decoder
 
-`tokenize()` scans input once, collects match candidates per offset, and runs Viterbi or beam search over LM scores. Default mode is Viterbi.
+`tokenize()` / `decode()` adapt UTF-16 text onto indexed decode. `decodeIndexed` / `decodeIndexedAsync` take host-supplied length, candidates, fallback, and scores — used for discrete symbol streams. Default mode is Viterbi. `decodeDetailed` returns spans and cumulative scores.
 
 ## Backend storage
 

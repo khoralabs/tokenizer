@@ -56,10 +56,25 @@ lattice.close();
 Pass decode options:
 
 ```typescript
-lattice.tokenize("hello world", { mode: "beam", beamWidth: 32 });
+lattice.tokenize("hello world", { mode: "beam", beamWidth: 32, useBigram: true });
 ```
 
 `tokenize()` compiles the lattice on first use if no compiled index is cached.
+
+## Detailed text decode
+
+```typescript
+import { createViterbiContext, decodeDetailed } from "@khoralabs/tkn";
+
+// … build ViterbiContext …
+const detailed = decodeDetailed("hello", ctx, { mode: "viterbi" });
+detailed.tokens;
+detailed.steps; // start/end, emission/transition, cumulativeScore
+detailed.score;
+detailed.complete;
+```
+
+`decode(text, ctx)` returns `detailed.tokens`. For discrete atoms (not UTF-16 text), see [Decode a symbol stream](decode-symbol-stream.md).
 
 ## TypeScript decode (async lattice)
 
@@ -94,7 +109,7 @@ const tokenCounts = new Map([
 ]);
 const edges = [{ from: "he", to: "llo", weight: 5 }];
 
-const lm = buildLmTables(tokenCounts, edges);
+const lm = buildLmTables(tokenCounts, edges, { smoothing: 0.1 });
 const compiled = compilePatterns(["he", "llo"], lm);
 const tokens = tokenizeCompiled("hello", compiled);
 ```
@@ -104,9 +119,17 @@ const tokens = tokenizeCompiled("hello", compiled);
 ```typescript
 const compiled = lattice.compile();
 compiled.patternCount;
+compiled.patterns; // trie terminals
 compiled.scan("hello");
+compiled.scanAtoms(["h", "e", "l", "l", "o"]);
 compiled.emissionLogProb("he");
 compiled.transitionLogProb("he", "llo");
 ```
 
-**Outcome:** `scan()` returns match candidates per offset. Log-prob methods return precomputed scores used by the decoder.
+Non-default smoothing returns an uncached snapshot:
+
+```typescript
+lattice.compile({ smoothing: 0.5 });
+```
+
+**Outcome:** `scan()` / `scanAtoms()` return match candidates per offset. Log-prob methods return precomputed scores used by the decoder.

@@ -14,15 +14,64 @@ Public exports from `@khoralabs/tkn` and subpaths. Subpaths re-export the main A
 ## Types
 
 ```typescript
+type Atom = string;
+
+type TerminalEntry = { pattern: string; atoms: readonly Atom[] };
+
 type LatticeSegment = { key: string; sequence: string[] };
 
 type SequencerInput = string | `<${number}>`;
 type SequencerOutput = { sequence: SequencerInput[]; key: string };
 
+type MatchCandidate = { pattern: string; length: number };
+
 type LatticeDecodeOptions =
-  | { mode?: "viterbi" }
-  | { mode: "beam"; beamWidth: number };
+  | { mode?: "viterbi"; useBigram?: boolean }
+  | { mode: "beam"; beamWidth: number; useBigram?: boolean };
+
+type LmCompileOptions = { smoothing?: number };
+
+type DecodeStep = {
+  token: string;
+  start: number;
+  end: number;
+  emissionScore: number;
+  transitionScore: number;
+  cumulativeScore: number;
+};
+
+type DecodeResult = {
+  tokens: string[];
+  steps: DecodeStep[];
+  score: number;
+  complete: boolean;
+};
 ```
+
+`MatchCandidate.length` is a count of **source atoms**, not JavaScript string length.
+
+## Atoms
+
+| Export | Description |
+|--------|-------------|
+| `Atom` | Opaque stream unit (string) |
+| `TerminalEntry` | Pattern key plus atom path used at insert |
+| `atomsFromText(text)` | One atom per UTF-16 code unit |
+| `joinAtoms(atoms, delimiter?)` | Join atoms into a pattern key |
+| `splitAtoms(key, delimiter)` | Split a key; drops empty trailing segments |
+| `assertNonEmptyAtoms(atoms)` | Throws if atoms empty or contain `""` |
+
+## Atom feeds
+
+Convenience generators that select the lattice matcher alphabet. Pass the result to `feedInputStream` / `feedInputStreamAsync`.
+
+| Export | Input | Atoms |
+|--------|-------|-------|
+| `feedCharacters(text)` | `string` | UTF-16 code units |
+| `feedBytes(bytes)` | `Uint8Array` | Latin-1 code units via `String.fromCharCode` |
+| `feedSymbols(symbols)` | `readonly Atom[]` | Unchanged opaque strings (rejects `""`) |
+
+Choosing a feed chooses the trie/AC edge alphabet for that lattice.
 
 ## `createLZSequencer(properties?)`
 
@@ -34,12 +83,15 @@ interface LZSequencerProperties {
     | IDictionary;
   historyOptions?: { bounded: true; maxLength: number } | { bounded: false };
   emissionPolicy?: "immediate"; // accepted in type; not implemented
+  atomDelimiter?: string; // default ""; inserted between atoms in pattern keys
 }
 ```
 
 Returns `Sequencer<LZGate[]>`.
 
 ## `Sequencer`
+
+Constructor options include `atomDelimiter?: string` (default `""`). When non-empty, keys are composed as `previous + delimiter + input` after the first atom.
 
 | Member | Type | Description |
 |--------|------|-------------|
@@ -54,6 +106,8 @@ Returns `Sequencer<LZGate[]>`.
 | `history` | `SequencerOutput[]` | All emitted segments |
 | `durationMS` | `number` | Time since first push |
 
+`Sequencer.evaluate(previous, input, gates, atomDelimiter?)` accepts an optional delimiter (default `""`).
+
 ## `createLatticeTokenizer(lattice, options?)`
 
 Parameters: sync `ILattice`, optional `{ sequencer?, transitionBatchSize? }`.
@@ -62,14 +116,14 @@ Returns:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `feed(text)` | `Promise<void>` | Run sequencer feed into lattice |
+| `feed(text)` | `Promise<void>` | Character-atom feed into lattice via `feedCharacters` |
 | `tokenize(text, options?)` | `string[]` | Decode text |
 | `vocabulary()` | `string[]` | All pattern strings |
 | `getTopTokens(limit?)` | `{ pattern, confidence }[]` | Top patterns by hub score |
 
 ## `createAsyncLatticeTokenizer(lattice, options?)`
 
-Same as sync helper, but `tokenize`, `vocabulary`, and `getTopTokens` return promises.
+Same as sync helper, but `tokenize`, `vocabulary`, and `getTopTokens` return promises. `feed` uses `feedCharacters`.
 
 ## `ILattice`
 
@@ -77,17 +131,19 @@ Same as sync helper, but `tokenize`, `vocabulary`, and `getTopTokens` return pro
 |--------|-------------|
 | `merge(pairs)` | Record transitions `[from, to, weight?][]` |
 | `getNext(from)` | Outgoing transitions with weights |
-| `nextCharacters(prefix)` | Trie child characters for prefix |
+| `nextCharacters(prefix)` | Trie child atoms for a character-atom prefix string |
 | `getTopTokens(limit?)` | Top patterns by hub score |
-| `ingest(segment)` | Store one segment |
+| `ingest(segment)` | Store one segment (trie edges follow `sequence` atoms) |
 | `ingestBatch(segments)` | Store many segments |
 | `commitFeedBatch(segments, pairs)` | Ingest and merge in one transaction |
-| `tokenize(text, options?)` | Decode; compiles lazily |
-| `compile()` | Build `ICompiledLattice` |
+| `tokenize(text, options?)` | Decode text; compiles lazily |
+| `compile(options?)` | Build `ICompiledLattice`; optional `{ smoothing }` |
 | `invalidateCompiled()` | Drop cached compile |
-| `vocabulary()` | All pattern strings |
+| `vocabulary()` | Graph pattern strings |
 | `pipe(source, batchSize?)` | Ingest from async generator |
 | `close()` | Close storage |
+
+`compile({ smoothing })` with non-default smoothing returns an uncached snapshot. Default smoothing fills the decode cache.
 
 ## `IAsyncLattice`
 
@@ -97,21 +153,54 @@ Same method set as `ILattice`. Storage methods return `Promise`.
 
 | Member | Description |
 |--------|-------------|
-| `patternCount` | Vocabulary size in automaton |
-| `scan(text)` | Match candidates per offset |
+| `patternCount` | Number of compiled patterns |
+| `patterns` | Frozen list of trie-terminal pattern keys |
+| `scan(text)` | Match candidates per UTF-16 offset |
+| `scanAtoms(source)` | Match candidates per atom offset |
 | `emissionLogProb(token)` | Unigram log-score |
 | `transitionLogProb(from, to)` | Bigram log-score; `from` may be `null` |
+
+`patterns` are trie terminals. Graph `vocabulary()` may differ.
+
+## Indexed decode
+
+```typescript
+type IndexedDecodeContext = {
+  length: number;
+  matchCandidates(offset: number): MatchCandidate[];
+  fallbackCandidate(offset: number): MatchCandidate | null;
+  transitionWeight(from: string | null, to: string): number;
+  emissionScore(token: string): number;
+};
+
+type AsyncIndexedDecodeContext = { /* async callbacks; length sync */ };
+```
+
+| Export | Description |
+|--------|-------------|
+| `decodeIndexed(context, options?)` | Viterbi/beam over source-atom offsets; returns `DecodeResult` |
+| `decodeIndexedAsync(context, options?)` | Async equivalent |
+| `decodeDetailed(text, ctx, options?)` | Text adapter over `decodeIndexed` |
+| `decodeDetailedAsync(text, ctx, options?)` | Async text adapter |
+| `decode(text, ctx, options?)` | `decodeDetailed(...).tokens` (incomplete → char-split fallback) |
+| `decodeAsync(text, ctx, options?)` | Async `decode` |
+| `viterbiDecode` / `beamDecode` | Thin wrappers over `decode` |
+| `viterbiDecodeAsync` / `beamDecodeAsync` | Async wrappers |
+
+Incomplete indexed paths return `{ complete: false, score: -Infinity, tokens: [], steps: [] }`. Invalid candidate lengths and non-positive/non-integer `beamWidth` throw `RangeError`.
+
+When `useBigram` is `false`, transition contribution is zero.
 
 ## Compile and decode utilities
 
 | Export | Description |
 |--------|-------------|
-| `buildLmTables(tokenCounts, edges)` | Build LM score functions |
-| `compilePatterns(patterns, lm)` | Build `ICompiledLattice` from pattern list |
+| `buildLmTables(tokenCounts, edges, options?)` | Build LM score functions; `options.smoothing` must be finite and `> 0` |
+| `compilePatterns(patterns, lm)` | Build `ICompiledLattice` from `string[]` or `TerminalEntry[]` |
 | `tokenizeCompiled(text, compiled, options?)` | Sync decode on compiled index |
 | `tokenizeCompiledAsync(text, compiled, options?)` | Async decode on compiled index |
-| `AhoCorasick` | Pattern automaton |
-| `PatternVocabulary` | In-memory pattern store |
+| `AhoCorasick` | Atom-edge pattern automaton |
+| `PatternVocabulary` | In-memory pattern store (`merge(atoms, pattern, markovId)`) |
 
 ## Pipeline
 
@@ -122,8 +211,9 @@ Same method set as `ILattice`. Storage methods return `Promise`.
 | `GlobFileJob` | File glob ingest job (character stream) |
 | `feedInputStream` | Feed sync lattice from `AsyncGenerator<SequencerInput>` |
 | `feedInputStreamAsync` | Feed async lattice from `AsyncGenerator<SequencerInput>` |
+| `feedCharacters` / `feedBytes` / `feedSymbols` | Atom feed generators |
 
-`IJob.input()` accepts any `AsyncGenerator<SequencerInput>`. Each yield is one token (string or sentinel), not necessarily one character.
+`IJob.input()` accepts any `AsyncGenerator<SequencerInput>`. Each yield is one atom.
 
 ## LZ sequencer
 
