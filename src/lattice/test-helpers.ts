@@ -34,6 +34,10 @@ export async function expectLatticeBasics(create: () => LatticeLike | Promise<La
 
   expect(await lattice.nextCharacters("hel")).toEqual(["l"]);
   expect(await lattice.nextCharacters("helios")).toEqual([]);
+  if (lattice.nextAtoms) {
+    expect(await lattice.nextAtoms(["h", "e", "l"])).toEqual(["l"]);
+    expect(await lattice.nextAtoms(["h", "e", "l", "i", "o", "s"])).toEqual([]);
+  }
 
   const top = await lattice.getTopTokens(3);
   expect(top).toHaveLength(3);
