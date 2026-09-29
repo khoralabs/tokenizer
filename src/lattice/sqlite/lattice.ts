@@ -5,6 +5,7 @@ import {
   type ICompiledLattice,
   type LmCompileOptions,
   tokenizeCompiled,
+  tokenizeCompiledAtoms,
 } from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
@@ -112,6 +113,10 @@ export class Lattice implements ILattice {
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
     return tokenizeCompiled(text, this.getCompiledLattice(), options);
+  }
+
+  tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): string[] {
+    return tokenizeCompiledAtoms(source, this.getCompiledLattice(), options);
   }
 
   invalidateCompiled(): void {

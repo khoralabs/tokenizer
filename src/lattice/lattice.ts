@@ -53,9 +53,15 @@ export interface ILattice {
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): void;
 
   /**
-   * Tokenize text via Viterbi decoding over graph transitions and trie candidates.
+   * Tokenize text (character-grain adapter) via Viterbi/beam over trie candidates.
    */
   tokenize(text: string, options?: LatticeDecodeOptions): string[];
+
+  /**
+   * Tokenize an explicit atom source (symbol / byte / char grains).
+   * Incomplete coverage returns `[]`.
+   */
+  tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): string[];
 
   /**
    * Build an in-memory decode index (Aho-Corasick + LM tables) from persisted state.
@@ -104,6 +110,7 @@ export interface IAsyncLattice {
   ingestBatch(segments: LatticeSegment[]): Promise<void>;
   commitFeedBatch(segments: LatticeSegment[], pairs: [string, string, number?][]): Promise<void>;
   tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]>;
+  tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): Promise<string[]>;
   compile(options?: LmCompileOptions): Promise<ICompiledLattice>;
   invalidateCompiled(): void;
   vocabulary(): Promise<string[]>;

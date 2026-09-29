@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { feedSymbols } from "../pipeline/feeds";
 import { terminalEntriesFromText } from "./atom";
-import { buildLmTables, compilePatterns, tokenizeCompiled } from "./compiled-lattice";
+import {
+  buildLmTables,
+  compilePatterns,
+  tokenizeCompiled,
+  tokenizeCompiledAtoms,
+} from "./compiled-lattice";
+import { Lattice as MemoryLattice } from "./memory/lattice";
 import { Lattice } from "./sqlite/lattice";
-import { createViterbiContext, decode } from "./tokenize";
+import { createViterbiContext, decode, decodeIndexed } from "./tokenize";
+import { createLatticeTokenizer } from "./tokenizer";
 
 describe("compiled lattice", () => {
   test("tokenize is stable across recompile", () => {
@@ -104,5 +112,48 @@ describe("compiled lattice", () => {
 
     const text = "abc";
     expect(tokenizeCompiled(text, lattice)).toEqual(decode(text, ctx));
+  });
+
+  test("tokenizeCompiledAtoms decodes opaque symbol grain", () => {
+    const lm = buildLmTables(
+      new Map([
+        ["foo|", 5],
+        ["bar|", 5],
+        ["foo|bar|", 10],
+      ]),
+      [{ from: "foo|", to: "bar|", weight: 3 }],
+    );
+    const compiled = compilePatterns(
+      [
+        { pattern: "foo|", atoms: ["foo|"] },
+        { pattern: "bar|", atoms: ["bar|"] },
+        { pattern: "foo|bar|", atoms: ["foo|", "bar|"] },
+      ],
+      lm,
+    );
+    expect(tokenizeCompiledAtoms(["foo|", "bar|"], compiled)).toEqual(["foo|bar|"]);
+  });
+
+  test("incomplete decode returns empty tokens without char-split", () => {
+    const result = decodeIndexed({
+      length: 2,
+      matchCandidates: () => [],
+      fallbackCandidate: () => null,
+      emissionScore: () => 0,
+      transitionWeight: () => 0,
+    });
+    expect(result.complete).toBe(false);
+    expect(result.tokens).toEqual([]);
+  });
+
+  test("tokenizer feedSource and tokenizeAtoms round-trip symbols", async () => {
+    const lattice = new MemoryLattice();
+    const tokenizer = createLatticeTokenizer(lattice);
+    const symbols = ["aa", "bb", "aa", "bb", "aa", "bb"];
+    await tokenizer.feedSource(feedSymbols(symbols));
+    const tokens = tokenizer.tokenizeAtoms(symbols);
+    expect(tokens.length).toBeGreaterThan(0);
+    expect(tokens.join("")).toBe(symbols.join(""));
+    lattice.close();
   });
 });

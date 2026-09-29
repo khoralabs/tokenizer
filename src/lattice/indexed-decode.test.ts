@@ -159,7 +159,7 @@ describe("decodeIndexed", () => {
 });
 
 describe("decodeDetailed text adapter", () => {
-  test("decode remains backward compatible", () => {
+  test("decode returns detailed tokens when complete", () => {
     const ctx = createViterbiContext({
       matchCandidates: (text, offset) => {
         const ch = text[offset];

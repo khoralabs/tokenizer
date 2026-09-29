@@ -7,6 +7,8 @@ import {
   createViterbiContext,
   decode,
   decodeAsync,
+  decodeIndexed,
+  decodeIndexedAsync,
   type LatticeDecodeOptions,
   type MatchCandidate,
 } from "./tokenize";
@@ -157,4 +159,49 @@ export async function tokenizeCompiledAsync(
     transitionLogProb: (from, to) => lattice.transitionLogProb(from, to),
   });
   return decodeAsync(text, ctx, options);
+}
+
+/** Grain-agnostic decode over an atom source; incomplete paths return `[]`. */
+export function tokenizeCompiledAtoms(
+  source: readonly Atom[],
+  lattice: ICompiledLattice,
+  options?: LatticeDecodeOptions,
+): string[] {
+  const byStart = lattice.scanAtoms(source);
+  const result = decodeIndexed(
+    {
+      length: source.length,
+      matchCandidates: (offset) => byStart[offset] ?? [],
+      fallbackCandidate: (offset) => {
+        const atom = source[offset];
+        return atom === undefined ? null : { pattern: atom, length: 1 };
+      },
+      emissionScore: (token) => lattice.emissionLogProb(token),
+      transitionWeight: (from, to) => lattice.transitionLogProb(from, to),
+    },
+    options,
+  );
+  return result.complete ? result.tokens : [];
+}
+
+export async function tokenizeCompiledAtomsAsync(
+  source: readonly Atom[],
+  lattice: ICompiledLattice,
+  options?: LatticeDecodeOptions,
+): Promise<string[]> {
+  const byStart = lattice.scanAtoms(source);
+  const result = await decodeIndexedAsync(
+    {
+      length: source.length,
+      matchCandidates: async (offset) => byStart[offset] ?? [],
+      fallbackCandidate: async (offset) => {
+        const atom = source[offset];
+        return atom === undefined ? null : { pattern: atom, length: 1 };
+      },
+      emissionScore: async (token) => lattice.emissionLogProb(token),
+      transitionWeight: async (from, to) => lattice.transitionLogProb(from, to),
+    },
+    options,
+  );
+  return result.complete ? result.tokens : [];
 }

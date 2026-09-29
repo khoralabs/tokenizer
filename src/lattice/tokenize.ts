@@ -404,8 +404,7 @@ export function decode(
   options?: LatticeDecodeOptions,
 ): string[] {
   const result = decodeDetailed(text, ctx, options);
-  if (result.complete) return result.tokens;
-  return text.length === 0 ? [] : text.split("");
+  return result.complete ? result.tokens : [];
 }
 
 export async function decodeAsync(
@@ -414,8 +413,7 @@ export async function decodeAsync(
   options?: LatticeDecodeOptions,
 ): Promise<string[]> {
   const result = await decodeDetailedAsync(text, ctx, options);
-  if (result.complete) return result.tokens;
-  return text.length === 0 ? [] : text.split("");
+  return result.complete ? result.tokens : [];
 }
 
 export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {

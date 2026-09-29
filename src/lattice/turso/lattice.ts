@@ -4,6 +4,7 @@ import {
   type ICompiledLattice,
   type LmCompileOptions,
   tokenizeCompiledAsync,
+  tokenizeCompiledAtomsAsync,
 } from "../compiled-lattice";
 import { ingestSegmentBatchAsync } from "../ingest-segment";
 import type { IAsyncLattice } from "../lattice";
@@ -118,6 +119,10 @@ export class Lattice implements IAsyncLattice {
 
   async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
     return tokenizeCompiledAsync(text, await this.getCompiledLattice(), options);
+  }
+
+  async tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): Promise<string[]> {
+    return tokenizeCompiledAtomsAsync(source, await this.getCompiledLattice(), options);
   }
 
   private async getCompiledLattice(): Promise<ICompiledLattice> {
