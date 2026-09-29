@@ -7,7 +7,6 @@ import { LZGate } from "./lz-gate";
 export interface LZSequencerProperties {
   cacheOptions?: { bounded: true; max: number } | { bounded: false } | IDictionary | undefined;
   historyOptions?: { bounded: true; maxLength: number } | { bounded: false };
-  emissionPolicy?: "immediate"; // TODO: add other policies
   /** Delimiter between atoms when composing pattern keys (default ""). */
   atomDelimiter?: string;
 }

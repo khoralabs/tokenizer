@@ -20,7 +20,7 @@ function createMount() {
     gates: [new LZGate({ cache: dictionary })],
     queue: new Queue({ historyOptions: { bounded: false } }),
   });
-  return { dictionary, lattice, sequencer };
+  return { lattice, sequencer };
 }
 
 class ArrayJob implements IJob {
@@ -33,8 +33,8 @@ class ArrayJob implements IJob {
 
 describe("Pipeline", () => {
   test("run ingests job input into lattice", async () => {
-    const { dictionary, lattice, sequencer } = createMount();
-    const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+    const { lattice, sequencer } = createMount();
+    const pipeline = new Pipeline({ lattice, sequencer });
 
     await pipeline.run(new ArrayJob("hello hello hello "));
 
@@ -43,8 +43,8 @@ describe("Pipeline", () => {
   });
 
   test("enqueue runs jobs serially and accumulates state", async () => {
-    const { dictionary, lattice, sequencer } = createMount();
-    const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+    const { lattice, sequencer } = createMount();
+    const pipeline = new Pipeline({ lattice, sequencer });
 
     const first = pipeline.enqueue(new ArrayJob("abc"));
     const second = pipeline.enqueue(new ArrayJob("def"));
@@ -62,8 +62,8 @@ describe("Pipeline", () => {
     await writeFile(join(dir, "b.txt"), "world ");
     await writeFile(join(dir, "skip.bin"), "ignored");
 
-    const { dictionary, lattice, sequencer } = createMount();
-    const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+    const { lattice, sequencer } = createMount();
+    const pipeline = new Pipeline({ lattice, sequencer });
 
     await pipeline.run(new GlobFileJob({ pattern: "*.txt", cwd: dir }));
 
@@ -80,7 +80,7 @@ describe("AsyncPipeline", () => {
       gates: [new LZGate({ cache: dictionary })],
       queue: new Queue({ historyOptions: { bounded: false } }),
     });
-    const pipeline = new AsyncPipeline({ lattice, sequencer, dictionary });
+    const pipeline = new AsyncPipeline({ lattice, sequencer });
 
     await pipeline.run(new ArrayJob("test test test "));
 
@@ -101,7 +101,6 @@ describe("AsyncPipeline", () => {
     await new Pipeline({
       lattice: sqlite,
       sequencer: sqliteSequencer,
-      dictionary: dictionarySqlite,
     }).run(new ArrayJob(input));
 
     const turso = await TursoLattice.open(":memory:");
@@ -112,7 +111,6 @@ describe("AsyncPipeline", () => {
     await new AsyncPipeline({
       lattice: turso,
       sequencer: tursoSequencer,
-      dictionary: dictionaryTurso,
     }).run(new ArrayJob(input));
 
     expect(sqliteSequencer.history.length).toBe(tursoSequencer.history.length);

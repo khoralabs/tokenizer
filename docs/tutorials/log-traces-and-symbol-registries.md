@@ -102,7 +102,7 @@ const sequencer = new Sequencer({
   gates: [new LZGate({ cache: dictionary })],
   queue: new Queue({ historyOptions: { bounded: false } }),
 });
-const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+const pipeline = new Pipeline({ lattice, sequencer });
 
 await pipeline.run(new TraceJob(traceSymbolStream(events, registry)));
 ```

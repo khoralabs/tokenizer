@@ -20,7 +20,7 @@ async function ingestFeed(source: AsyncGenerator<string>, options?: { atomDelimi
   });
   await feedInputStream(lattice, sequencer, source, createFeedState(), 1000);
   const compiled = lattice.compile();
-  return { lattice, sequencer, compiled, dictionary };
+  return { lattice, sequencer, compiled };
 }
 
 function assertTrieMatchesHistory(
@@ -151,7 +151,7 @@ describe("feed alphabet → lattice / trie / decode", () => {
       gates: [new LZGate({ cache: dictionary })],
       queue: new Queue({ historyOptions: { bounded: false } }),
     });
-    const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+    const pipeline = new Pipeline({ lattice, sequencer });
 
     class SymbolJob implements IJob {
       input() {
@@ -162,8 +162,6 @@ describe("feed alphabet → lattice / trie / decode", () => {
     await pipeline.run(new SymbolJob());
     const compiled = lattice.compile();
 
-    // Pipeline.dictionary is the shared LZ cache only — not an alphabet tag
-    expect(pipeline.dictionary).toBe(dictionary);
     expect(compiled.scanAtoms(["aa", "bb"])[0]).toContainEqual({
       pattern: "aabb",
       length: 2,

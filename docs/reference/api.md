@@ -83,7 +83,6 @@ interface LZSequencerProperties {
     | { bounded: false }
     | IDictionary;
   historyOptions?: { bounded: true; maxLength: number } | { bounded: false };
-  emissionPolicy?: "immediate"; // accepted in type; not implemented
   atomDelimiter?: string; // default ""; inserted between atoms in pattern keys
 }
 ```

@@ -1,9 +1,11 @@
 import type { Atom, TerminalEntry } from "./atom";
+import type { MatchCandidate } from "./tokenize";
+
+export type { MatchCandidate };
 
 /**
  * Interface for a prefix trie that stores patterns as paths of opaque atoms.
  */
-export type MatchCandidate = { pattern: string; length: number };
 
 export interface ITrie {
   /**

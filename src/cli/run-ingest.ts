@@ -48,7 +48,7 @@ export async function runIngest(options: RunIngestOptions): Promise<void> {
   if (backend === "turso") {
     const lattice = await openTursoLatticeFromConfig(options.config, { bulkIngest: true });
     try {
-      const pipeline = new AsyncPipeline({ lattice, sequencer, dictionary });
+      const pipeline = new AsyncPipeline({ lattice, sequencer });
       await pipeline.run(new GlobFileJob({ pattern: options.pattern, cwd: options.cwd }));
 
       const vocabulary = await lattice.vocabulary();
@@ -71,7 +71,7 @@ export async function runIngest(options: RunIngestOptions): Promise<void> {
 
   const lattice = openSqliteLatticeFromConfig(options.config, { bulkIngest: true });
   try {
-    const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+    const pipeline = new Pipeline({ lattice, sequencer });
     await pipeline.run(new GlobFileJob({ pattern: options.pattern, cwd: options.cwd }));
 
     const vocabulary = lattice.vocabulary();
