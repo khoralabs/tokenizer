@@ -7,7 +7,8 @@ import { LZGate } from "./lz-gate";
 export interface LZSequencerProperties {
   cacheOptions?: { bounded: true; max: number } | { bounded: false } | IDictionary | undefined;
   historyOptions?: { bounded: true; maxLength: number } | { bounded: false };
-  emissionPolicy?: "immediate"; // TODO: add other policies
+  /** Delimiter between atoms when composing pattern keys (default ""). */
+  atomDelimiter?: string;
 }
 export const createLZSequencer = (properties?: LZSequencerProperties): Sequencer<LZGate[]> => {
   const cache = isDictionary(properties?.cacheOptions)
@@ -25,6 +26,7 @@ export const createLZSequencer = (properties?: LZSequencerProperties): Sequencer
   const sequencer = new Sequencer({
     gates: [gate],
     queue,
+    atomDelimiter: properties?.atomDelimiter,
   });
 
   return sequencer;

@@ -1,22 +1,24 @@
 # Ingest a custom token stream
 
-Feed discrete string tokens into a lattice through the sequencer and LZ gate.
+Feed discrete string atoms into a lattice through the sequencer and LZ gate.
 
 ## Prerequisites
 
 - Symbols encoded as `SequencerInput` (`string` or `<number>` sentinel)
-- One token per `push()` — not character-by-character
+- One atom per `push()` / yield
 - See [Custom symbol streams](../tutorials/custom-symbol-streams.md) for a full walkthrough
 
 ## Symbol rules
 
-- Concatenate gate keys have no separator: `previous + input`
+- Default gate keys concatenate atoms: `previous + input`
+- Optional `atomDelimiter` on `Sequencer` / `createLZSequencer` inserts a separator between atoms
 - Use `<0>` for event boundaries and `<1>` for trace boundaries when needed
 - Map domain objects to strings before feed
+- Trie edges follow each `LatticeSegment.sequence` atom (not UTF-16 splits of the key)
 
 ## Steps
 
-1. Define `async function* symbols(...): AsyncGenerator<SequencerInput>`.
+1. Prefer `feedSymbols(symbols)` or define `async function* symbols(...): AsyncGenerator<SequencerInput>`.
 
 2. Implement `IJob`:
 
@@ -34,47 +36,53 @@ class SymbolJob implements IJob {
 3. Build sequencer and lattice:
 
 ```typescript
-import { Bounded, LZGate, Pipeline, Queue, Sequencer } from "@khoralabs/tkn";
+import { createLZSequencer, Pipeline } from "@khoralabs/tkn";
 import { Lattice } from "@khoralabs/tkn/memory";
 
-const dictionary = new Bounded(10_000);
-const sequencer = new Sequencer({
-  gates: [new LZGate({ cache: dictionary })],
-  queue: new Queue({ historyOptions: { bounded: false } }),
+const sequencer = createLZSequencer({
+  cacheOptions: { bounded: true, max: 10_000 },
+  historyOptions: { bounded: false },
+  atomDelimiter: "", // set when multi-atom keys need a separator
 });
 const lattice = new Lattice();
-const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+const pipeline = new Pipeline({ lattice, sequencer });
 ```
 
 4. Run ingest:
 
 ```typescript
-await pipeline.run(new SymbolJob(symbols()));
+import { feedSymbols } from "@khoralabs/tkn";
+
+await pipeline.run(new SymbolJob(feedSymbols(["svc:api", "lvl:err", "<0>"])));
 ```
 
 5. Verify:
 
 ```typescript
 console.log(lattice.vocabulary().length > 0);
+console.log(lattice.compile().patterns);
 lattice.close();
 ```
 
-**Outcome:** `vocabulary().length` is greater than zero.
+**Outcome:** `vocabulary().length` is greater than zero; `compile().patterns` lists trie terminals.
 
 ## Without Pipeline
 
 Call `feedInputStream` directly:
 
 ```typescript
-import { createFeedState, feedInputStream } from "@khoralabs/tkn";
+import { createFeedState, feedInputStream, feedSymbols } from "@khoralabs/tkn";
 
 const state = createFeedState();
-await feedInputStream(lattice, sequencer, symbols(), state, 1000);
+await feedInputStream(lattice, sequencer, feedSymbols(["a", "b"]), state, 1000);
 ```
 
 Use `feedInputStreamAsync` with `AsyncPipeline` and an async lattice backend.
 
+Also available: `feedCharacters(text)`, `feedBytes(uint8Array)`.
+
 ## Related
 
+- [Decode a symbol stream](decode-symbol-stream.md)
 - [Log traces and symbol registries](../tutorials/log-traces-and-symbol-registries.md)
 - [Ingest pre-segmented patterns](ingest-pre-segmented-patterns.md)

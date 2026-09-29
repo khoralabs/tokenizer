@@ -1,7 +1,15 @@
 import { Database } from "bun:sqlite";
-import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
+import type { Atom } from "../atom";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiled,
+  tokenizeCompiledAtoms,
+} from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
@@ -92,12 +100,23 @@ export class Lattice implements ILattice {
     this.maybeCheckpoint();
   }
 
-  compile(): ICompiledLattice {
-    return compilePatterns(this.trie.listTerminalPatterns(), this.graph.buildLmTables());
+  compile(options?: LmCompileOptions): ICompiledLattice {
+    const compiled = compilePatterns(
+      this.trie.listTerminalEntries(),
+      this.graph.buildLmTables(options),
+    );
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiledLattice = compiled;
+    }
+    return compiled;
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
     return tokenizeCompiled(text, this.getCompiledLattice(), options);
+  }
+
+  tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): string[] {
+    return tokenizeCompiledAtoms(source, this.getCompiledLattice(), options);
   }
 
   invalidateCompiled(): void {
@@ -129,6 +148,11 @@ export class Lattice implements ILattice {
     return this.graph.getNext(from);
   }
 
+  nextAtoms(prefix: readonly Atom[]): Atom[] {
+    return this.trie.nextAtoms(prefix);
+  }
+
+  /** @deprecated Prefer `nextAtoms`. */
   nextCharacters(prefix: string): string[] {
     return this.trie.nextCharacters(prefix);
   }

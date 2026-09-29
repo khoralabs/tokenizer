@@ -1,6 +1,6 @@
 # @khoralabs/tkn _(tkn)_
 
-Online pattern discovery and lattice-backed decoding for sequential text.
+Online pattern discovery and lattice-backed decoding over character, byte, or opaque symbol streams.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ The npm package is `@khoralabs/tkn`.
 
 tkn discovers segments in sequential input through a LZ-style dictionary gate. The gate grows a prefix while the extended pattern is in the dictionary. The gate emits a segment when the extended pattern is not in the dictionary.
 
-An optional lattice stores discovered patterns and transitions between them. Decoding runs Aho-Corasick pattern matching and Viterbi or beam search over add-k smoothed unigram and normalized bigram scores.
+An optional lattice stores discovered patterns and transitions between them. Trie edges follow feed atoms (characters, bytes, or opaque symbols). Decoding runs Aho-Corasick pattern matching and Viterbi or beam search over add-k smoothed unigram and normalized bigram scores.
 
 Segmentation is greedy and single-pass. The library does not implement BPE or SentencePiece.
 
@@ -77,9 +77,10 @@ See [CLI reference](docs/reference/cli.md) for configuration, flags, and example
 | Section | Path |
 |---------|------|
 | Tutorials | [docs/tutorials/](docs/tutorials/) — [getting started](docs/tutorials/getting-started.md), [custom symbol streams](docs/tutorials/custom-symbol-streams.md), [log traces](docs/tutorials/log-traces-and-symbol-registries.md) |
-| How-to | [docs/how-to/](docs/how-to/) |
+| How-to | [docs/how-to/](docs/how-to/) — [decode text](docs/how-to/decode-text.md), [decode symbol stream](docs/how-to/decode-symbol-stream.md) |
 | Explanation | [docs/explanation/](docs/explanation/) |
-| Reference | [docs/reference/](docs/reference/) |
+| Reference | [docs/reference/](docs/reference/) — [API](docs/reference/api.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
 
 Index: [docs/README.md](docs/README.md)
 

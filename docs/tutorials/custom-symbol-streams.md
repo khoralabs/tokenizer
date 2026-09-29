@@ -1,6 +1,6 @@
 # Custom symbol streams
 
-This tutorial feeds discrete string tokens into a lattice. Each token is one `push()` call. The feed is not character-by-character.
+This tutorial feeds discrete string atoms into a lattice. Each atom is one `push()` / generator yield. The trie stores one edge per atom (not UTF-16 character splits).
 
 ## Prerequisites
 
@@ -9,9 +9,9 @@ This tutorial feeds discrete string tokens into a lattice. Each token is one `pu
 
 ## Symbol encoding
 
-`SequencerInput` is `string | `<number>``. One yield or one `push()` is one logical token.
+`SequencerInput` is `string | `<number>``. One yield or one `push()` is one opaque atom.
 
-The sequencer forms gate keys by concatenation: `current = previous + input`. There is no separator between tokens. Use sentinel markers to mark boundaries:
+Gate keys default to concatenation: `current = previous + input`. Optional `atomDelimiter` inserts a separator between atoms. Sentinels still mark boundaries when you need them:
 
 | Sentinel | Typical use |
 |----------|-------------|
@@ -35,17 +35,18 @@ const events = [
 
 The host maps domain values to stable strings before feed. tkn stores strings only.
 
-## Step 1 — Define a symbol generator
-
-Wrap your tokens in an async generator.
+## Step 1 — Use `feedSymbols` (or a custom generator)
 
 ```typescript
-import type { SequencerInput } from "@khoralabs/tkn";
+import { feedSymbols, type SequencerInput } from "@khoralabs/tkn";
 
+const source = feedSymbols(events);
+
+// Or hand-roll the same shape:
 async function* eventSymbols(
-  events: Array<{ service: string; level: string; op: string }>,
+  rows: Array<{ service: string; level: string; op: string }>,
 ): AsyncGenerator<SequencerInput> {
-  for (const e of events) {
+  for (const e of rows) {
     yield `svc:${e.service}`;
     yield `lvl:${e.level}`;
     yield `op:${e.op}`;
@@ -54,12 +55,14 @@ async function* eventSymbols(
 }
 ```
 
+Other alphabets: `feedCharacters(text)`, `feedBytes(uint8Array)`.
+
 ## Step 2 — Implement a custom job
 
 `IJob` supplies the generator to `Pipeline`.
 
 ```typescript
-import type { IJob } from "@khoralabs/tkn";
+import type { IJob, SequencerInput } from "@khoralabs/tkn";
 
 class SymbolJob implements IJob {
   constructor(private source: AsyncGenerator<SequencerInput>) {}
@@ -72,21 +75,20 @@ class SymbolJob implements IJob {
 
 ## Step 3 — Build sequencer and pipeline
 
-Use `LZGate` with a bounded dictionary for long streams.
+Use `LZGate` with a bounded dictionary for long streams. Set `atomDelimiter` when keys should not be bare concatenation.
 
 ```typescript
-import { Pipeline } from "@khoralabs/tkn";
+import { createLZSequencer, Pipeline } from "@khoralabs/tkn";
 import { Lattice } from "@khoralabs/tkn/memory";
-import { Bounded, LZGate, Queue, Sequencer } from "@khoralabs/tkn";
 
-const dictionary = new Bounded(10_000);
-const sequencer = new Sequencer({
-  gates: [new LZGate({ cache: dictionary })],
-  queue: new Queue({ historyOptions: { bounded: false } }),
+const sequencer = createLZSequencer({
+  cacheOptions: { bounded: true, max: 10_000 },
+  historyOptions: { bounded: false },
+  atomDelimiter: "", // or "|" when joining multi-atom keys
 });
 
 const lattice = new Lattice();
-const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+const pipeline = new Pipeline({ lattice, sequencer });
 ```
 
 ## Step 4 — Run ingest
@@ -104,28 +106,19 @@ console.log(lattice.vocabulary().length);
 console.log(lattice.getTopTokens(5));
 ```
 
-The LZ gate emits segments when an extended prefix is not in the dictionary. The pipeline ingests each segment and records transitions between consecutive segment keys.
+The LZ gate emits segments when an extended prefix is not in the dictionary. Ingest walks `sequence` as atom edges in the trie.
 
-## Step 5 — Inspect transitions
+## Step 5 — Decode over symbols
+
+`tokenize(text)` is the character-grain adapter. For discrete atoms use `tokenizeAtoms` (or low-level `decodeIndexed`):
 
 ```typescript
-for (const pattern of lattice.vocabulary()) {
-  const next = lattice.getNext(pattern);
-  if (next.length > 0) {
-    console.log(pattern, "→", next);
-  }
-}
-
+const symbols = ["svc:api", "lvl:err", "op:read", "<0>"];
+console.log(lattice.tokenizeAtoms(symbols));
 lattice.close();
 ```
 
-## Decode and symbol streams
-
-`tokenize(text)` scans one string with Aho-Corasick. It matches patterns as substrings of that string.
-
-For discrete symbol streams, graph queries (`getNext`, `getTopTokens`, `vocabulary`) do not require serialization. Decode requires a host-defined string form where learned patterns are substring-safe, or a separate encoding step.
-
-See [Decode text](../how-to/decode-text.md) for decode options and [Log traces and symbol registries](log-traces-and-symbol-registries.md) for structured log ingest.
+See [Decode a symbol stream](../how-to/decode-symbol-stream.md) for spans/scores via `decodeIndexed`.
 
 ## Next steps
 

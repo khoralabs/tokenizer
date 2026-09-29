@@ -46,7 +46,7 @@ async function benchSqlite(file: string): Promise<{
     gates: [new LZGate({ cache: dictionary })],
     queue: new Queue({ historyOptions: { bounded: false } }),
   });
-  const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+  const pipeline = new Pipeline({ lattice, sequencer });
 
   const t0 = performance.now();
   await pipeline.run(new GlobFileJob({ pattern: file, cwd: projectRoot }));
@@ -74,7 +74,7 @@ async function benchTurso(file: string): Promise<{
     gates: [new LZGate({ cache: dictionary })],
     queue: new Queue({ historyOptions: { bounded: false } }),
   });
-  const pipeline = new AsyncPipeline({ lattice, sequencer, dictionary });
+  const pipeline = new AsyncPipeline({ lattice, sequencer });
 
   const t0 = performance.now();
   await pipeline.run(new GlobFileJob({ pattern: file, cwd: projectRoot }));

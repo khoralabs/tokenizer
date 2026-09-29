@@ -1,6 +1,14 @@
-import { compilePatterns, type ICompiledLattice, tokenizeCompiled } from "../compiled-lattice";
+import type { Atom } from "../atom";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiled,
+  tokenizeCompiledAtoms,
+} from "../compiled-lattice";
 import { ingestSegmentBatch } from "../ingest-segment";
 import type { ILattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import { PatternVocabulary } from "../pattern-vocabulary";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
@@ -47,12 +55,23 @@ export class Lattice implements ILattice {
     this.merge(pairs);
   }
 
-  compile(): ICompiledLattice {
-    return compilePatterns(this.patterns.listTerminalPatterns(), this.graph.buildLmTables());
+  compile(options?: LmCompileOptions): ICompiledLattice {
+    const compiled = compilePatterns(
+      this.patterns.listTerminalEntries(),
+      this.graph.buildLmTables(options),
+    );
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiled = compiled;
+    }
+    return compiled;
   }
 
   tokenize(text: string, options?: LatticeDecodeOptions): string[] {
     return tokenizeCompiled(text, this.getCompiled(), options);
+  }
+
+  tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): string[] {
+    return tokenizeCompiledAtoms(source, this.getCompiled(), options);
   }
 
   vocabulary(): string[] {
@@ -63,6 +82,11 @@ export class Lattice implements ILattice {
     return this.graph.getNext(from);
   }
 
+  nextAtoms(prefix: readonly Atom[]): Atom[] {
+    return this.patterns.nextAtoms(prefix);
+  }
+
+  /** @deprecated Prefer `nextAtoms`. */
   nextCharacters(prefix: string): string[] {
     return this.patterns.nextCharacters(prefix);
   }

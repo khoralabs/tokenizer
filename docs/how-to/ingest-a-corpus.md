@@ -57,7 +57,7 @@ const sequencer = new Sequencer({
 });
 
 const lattice = new Lattice({ filename: ".tkn/lattice.db", bulkIngest: true });
-const pipeline = new Pipeline({ lattice, sequencer, dictionary });
+const pipeline = new Pipeline({ lattice, sequencer });
 
 await pipeline.run(new GlobFileJob({ pattern: "corpus/**/*.txt", cwd: "." }));
 
@@ -81,7 +81,7 @@ const sequencer = new Sequencer({
 });
 
 const lattice = await TursoLattice.open({ filename: ".tkn/lattice.db", bulkIngest: true });
-const pipeline = new AsyncPipeline({ lattice, sequencer, dictionary });
+const pipeline = new AsyncPipeline({ lattice, sequencer });
 
 await pipeline.run(new GlobFileJob({ pattern: "corpus/**/*.txt", cwd: "." }));
 

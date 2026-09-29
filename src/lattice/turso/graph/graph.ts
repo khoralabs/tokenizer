@@ -138,7 +138,9 @@ export class Graph {
     return (row?.total as number | undefined) ?? 0;
   }
 
-  async buildLmTables(): Promise<LmTables> {
+  async buildLmTables(
+    options?: import("../../compiled-lattice").LmCompileOptions,
+  ): Promise<LmTables> {
     const tokenCounts = new Map<string, number>();
     const countRows = await this.statements.selectAllTokenCounts.all();
     for (const row of countRows) {
@@ -152,6 +154,6 @@ export class Graph {
       to: row.to_token as string,
       weight: row.weight as number,
     }));
-    return buildLmTables(tokenCounts, edges);
+    return buildLmTables(tokenCounts, edges, options);
   }
 }

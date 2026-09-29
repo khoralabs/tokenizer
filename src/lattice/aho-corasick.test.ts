@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { AhoCorasick } from "./aho-corasick";
+import { atomsFromText, terminalEntriesFromText } from "./atom";
 
 function bruteForceMatches(patterns: string[], text: string, offset: number) {
   const matches: { pattern: string; length: number }[] = [];
@@ -14,9 +15,9 @@ function bruteForceMatches(patterns: string[], text: string, offset: number) {
 describe("AhoCorasick", () => {
   test("matches agree with brute-force scan", () => {
     const patterns = ["he", "llo", "hello", "a", "ab", "b", "c"];
-    const ac = new AhoCorasick(patterns);
+    const ac = new AhoCorasick(terminalEntriesFromText(patterns));
     const text = "hello abc";
-    const byStart = ac.matchStarts(text);
+    const byStart = ac.matchStarts(atomsFromText(text));
 
     for (let offset = 0; offset < text.length; offset++) {
       const fromAc = byStart[offset] ?? [];
@@ -28,8 +29,14 @@ describe("AhoCorasick", () => {
   });
 
   test("finds overlapping patterns at one offset", () => {
-    const ac = new AhoCorasick(["a", "ab", "abc"]);
-    const atZero = ac.matchStarts("abc")[0] ?? [];
+    const ac = new AhoCorasick(terminalEntriesFromText(["a", "ab", "abc"]));
+    const atZero = ac.matchStarts(atomsFromText("abc"))[0] ?? [];
     expect(atZero.map((m) => m.pattern).sort()).toEqual(["a", "ab", "abc"]);
+  });
+
+  test("rejects string-list footgun: opaque atoms need TerminalEntry", () => {
+    const ac = new AhoCorasick([{ pattern: "foo|bar|", atoms: ["foo|", "bar|"] }]);
+    expect(ac.matchStarts(["foo|", "bar|"])[0]?.map((m) => m.pattern)).toEqual(["foo|bar|"]);
+    expect(ac.matchStarts(atomsFromText("foo|bar|"))[0] ?? []).toEqual([]);
   });
 });

@@ -52,10 +52,19 @@ import { Lattice } from "@khoralabs/tkn/bun-sqlite";
 
 const tokenizer = createLatticeTokenizer(new Lattice());
 
-await tokenizer.feed(corpus);
+await tokenizer.feed(corpus); // character grain
 tokenizer.tokenize("hello");
 tokenizer.vocabulary();
 tokenizer.getTopTokens(10);
+```
+
+For opaque symbols (or bytes), use `feedSource` / `tokenizeAtoms`:
+
+```typescript
+import { feedSymbols } from "@khoralabs/tkn";
+
+await tokenizer.feedSource(feedSymbols(["svc:api", "lvl:err", "<0>"]));
+tokenizer.tokenizeAtoms(["svc:api", "lvl:err", "<0>"]);
 ```
 
 Options:
@@ -91,6 +100,7 @@ import { createLZSequencer } from "@khoralabs/tkn";
 const sequencer = createLZSequencer({
   cacheOptions: { bounded: true, max: 10_000 },
   historyOptions: { bounded: true, maxLength: 1000 },
+  atomDelimiter: "", // set when multi-atom keys need a separator
 });
 ```
 
@@ -119,7 +129,7 @@ const sequencer = new Sequencer({
 });
 ```
 
-For non-text symbol streams (events, logs, sensors), see [Custom symbol streams](../tutorials/custom-symbol-streams.md) and [Ingest a custom token stream](../how-to/ingest-custom-token-stream.md).
+For non-text symbol streams (events, logs, sensors), see [Custom symbol streams](../tutorials/custom-symbol-streams.md), [Ingest a custom token stream](ingest-custom-token-stream.md), and [Decode a symbol stream](decode-symbol-stream.md).
 
 ## Manual lattice ingest
 

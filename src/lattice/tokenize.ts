@@ -2,7 +2,9 @@ import { bigramLogProb, DEFAULT_LM_SMOOTHING, type LmStats, unigramLogProb } fro
 
 export type MatchCandidate = { pattern: string; length: number };
 
-export type LatticeDecodeOptions = { mode?: "viterbi" } | { mode: "beam"; beamWidth: number };
+export type LatticeDecodeOptions =
+  | { mode?: "viterbi"; useBigram?: boolean }
+  | { mode: "beam"; beamWidth: number; useBigram?: boolean };
 
 export interface ViterbiContext {
   matchCandidates(text: string, offset: number): MatchCandidate[];
@@ -16,15 +18,53 @@ export interface AsyncViterbiContext {
   emissionScore(token: string): Promise<number>;
 }
 
-/** Bigram backpointer: prevToken is the last-token state at prevPos. */
-type Backpointer = { prevPos: number; prevToken: string | null; token: string };
+export type IndexedDecodeContext = {
+  length: number;
+  matchCandidates(offset: number): MatchCandidate[];
+  fallbackCandidate(offset: number): MatchCandidate | null;
+  transitionWeight(from: string | null, to: string): number;
+  emissionScore(token: string): number;
+};
+
+export type AsyncIndexedDecodeContext = {
+  length: number;
+  matchCandidates(offset: number): Promise<MatchCandidate[]>;
+  fallbackCandidate(offset: number): Promise<MatchCandidate | null>;
+  transitionWeight(from: string | null, to: string): Promise<number>;
+  emissionScore(token: string): Promise<number>;
+};
+
+export type DecodeStep = {
+  token: string;
+  start: number;
+  end: number;
+  emissionScore: number;
+  transitionScore: number;
+  cumulativeScore: number;
+};
+
+export type DecodeResult = {
+  tokens: string[];
+  steps: DecodeStep[];
+  score: number;
+  complete: boolean;
+};
+
+/** Bigram backpointer with score contributions for step reconstruction. */
+type Backpointer = {
+  prevPos: number;
+  prevToken: string | null;
+  token: string;
+  emission: number;
+  transition: number;
+};
 
 type Layer = {
   scores: Map<string | null, number>;
   back: Map<string | null, Backpointer>;
 };
 
-type DecodeRunOptions = { beamWidth?: number };
+type DecodeRunOptions = { beamWidth?: number; useBigram?: boolean };
 
 function createLayer(): Layer {
   return { scores: new Map(), back: new Map() };
@@ -53,9 +93,35 @@ function pruneLayer(layer: Layer, beamWidth: number): void {
   layer.back = back;
 }
 
-function reconstructTokens(layers: Layer[], n: number, text: string): string[] {
+function assertPositiveIntegerBeamWidth(beamWidth: number): void {
+  if (!Number.isInteger(beamWidth) || beamWidth <= 0) {
+    throw new RangeError(`beamWidth must be a positive integer, got ${beamWidth}`);
+  }
+}
+
+function assertValidCandidate(length: number, offset: number, n: number): void {
+  if (!Number.isInteger(length) || length <= 0) {
+    throw new RangeError(`candidate length must be a positive integer, got ${length}`);
+  }
+  if (offset + length > n) {
+    throw new RangeError(
+      `candidate length ${length} at offset ${offset} extends beyond source length ${n}`,
+    );
+  }
+}
+
+function incompleteResult(): DecodeResult {
+  return {
+    tokens: [],
+    steps: [],
+    score: Number.NEGATIVE_INFINITY,
+    complete: false,
+  };
+}
+
+function reconstructResult(layers: Layer[], n: number): DecodeResult {
   const end = layers[n];
-  if (!end) return text.split("");
+  if (!end) return incompleteResult();
 
   let bestToken: string | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
@@ -68,84 +134,125 @@ function reconstructTokens(layers: Layer[], n: number, text: string): string[] {
     }
   }
 
-  if (bestToken === null) return text.split("");
+  if (bestToken === null) return incompleteResult();
 
-  const tokens: string[] = [];
+  const steps: DecodeStep[] = [];
   let pos = n;
   let lastToken: string | null = bestToken;
 
   while (pos > 0 && lastToken !== null) {
     const layer = layers[pos];
-    if (!layer) break;
+    if (!layer) return incompleteResult();
 
     const step = layer.back.get(lastToken);
-    if (!step) break;
+    if (!step) return incompleteResult();
 
-    tokens.unshift(step.token);
+    steps.unshift({
+      token: step.token,
+      start: step.prevPos,
+      end: pos,
+      emissionScore: step.emission,
+      transitionScore: step.transition,
+      cumulativeScore: layer.scores.get(lastToken) ?? Number.NEGATIVE_INFINITY,
+    });
     pos = step.prevPos;
     lastToken = step.prevToken;
   }
 
-  return tokens;
+  if (pos !== 0) return incompleteResult();
+
+  return {
+    tokens: steps.map((s) => s.token),
+    steps,
+    score: bestScore,
+    complete: true,
+  };
 }
 
-function extendLayer(
+function resolveCandidates(
+  matchCandidates: MatchCandidate[],
+  fallback: MatchCandidate | null,
+): MatchCandidate[] {
+  if (matchCandidates.length > 0) return matchCandidates;
+  return fallback ? [fallback] : [];
+}
+
+function extendIndexed(
   n: number,
   i: number,
   prevToken: string | null,
   baseScore: number,
   candidates: MatchCandidate[],
   layers: Layer[],
-  ctx: Pick<ViterbiContext, "transitionWeight" | "emissionScore">,
+  emissionScore: (token: string) => number,
+  transitionWeight: (from: string | null, to: string) => number,
+  useBigram: boolean,
   beamWidth?: number,
 ): void {
   for (const { pattern, length } of candidates) {
+    assertValidCandidate(length, i, n);
     const j = i + length;
-    if (j > n) continue;
 
-    const emission = ctx.emissionScore(pattern);
-    const transition = ctx.transitionWeight(prevToken, pattern);
+    const emission = emissionScore(pattern);
+    const transition = useBigram ? transitionWeight(prevToken, pattern) : 0;
     if (transition === Number.NEGATIVE_INFINITY) continue;
 
     const score = baseScore + emission + transition;
     const nextLayer = layers[j] ?? createLayer();
     layers[j] = nextLayer;
-    updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+    updateLayer(nextLayer, pattern, score, {
+      prevPos: i,
+      prevToken,
+      token: pattern,
+      emission,
+      transition,
+    });
     if (beamWidth !== undefined) pruneLayer(nextLayer, beamWidth);
   }
 }
 
-async function extendLayerAsync(
+async function extendIndexedAsync(
   n: number,
   i: number,
   prevToken: string | null,
   baseScore: number,
   candidates: MatchCandidate[],
   layers: Layer[],
-  ctx: Pick<AsyncViterbiContext, "transitionWeight" | "emissionScore">,
+  emissionScore: (token: string) => Promise<number>,
+  transitionWeight: (from: string | null, to: string) => Promise<number>,
+  useBigram: boolean,
   beamWidth?: number,
 ): Promise<void> {
   for (const { pattern, length } of candidates) {
+    assertValidCandidate(length, i, n);
     const j = i + length;
-    if (j > n) continue;
 
-    const emission = await ctx.emissionScore(pattern);
-    const transition = await ctx.transitionWeight(prevToken, pattern);
+    const emission = await emissionScore(pattern);
+    const transition = useBigram ? await transitionWeight(prevToken, pattern) : 0;
     if (transition === Number.NEGATIVE_INFINITY) continue;
 
     const score = baseScore + emission + transition;
     const nextLayer = layers[j] ?? createLayer();
     layers[j] = nextLayer;
-    updateLayer(nextLayer, pattern, score, { prevPos: i, prevToken, token: pattern });
+    updateLayer(nextLayer, pattern, score, {
+      prevPos: i,
+      prevToken,
+      token: pattern,
+      emission,
+      transition,
+    });
     if (beamWidth !== undefined) pruneLayer(nextLayer, beamWidth);
   }
 }
 
-function runBigramDecode(text: string, ctx: ViterbiContext, options?: DecodeRunOptions): string[] {
-  const n = text.length;
-  if (n === 0) return [];
+function runIndexedDecode(context: IndexedDecodeContext, options?: DecodeRunOptions): DecodeResult {
+  const n = context.length;
+  if (n === 0) {
+    return { tokens: [], steps: [], score: 0, complete: true };
+  }
 
   const beamWidth = options?.beamWidth;
+  const useBigram = options?.useBigram ?? true;
   const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
   layers[0]?.scores.set(null, 0);
 
@@ -154,61 +261,141 @@ function runBigramDecode(text: string, ctx: ViterbiContext, options?: DecodeRunO
     if (!layer || layer.scores.size === 0) continue;
     if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
 
+    const candidates = resolveCandidates(context.matchCandidates(i), context.fallbackCandidate(i));
+    if (candidates.length === 0) continue;
+
     for (const [prevToken, baseScore] of layer.scores) {
       if (baseScore === Number.NEGATIVE_INFINITY) continue;
 
-      let candidates = ctx.matchCandidates(text, i);
-      if (candidates.length === 0) {
-        const char = text[i];
-        if (char === undefined) continue;
-        candidates = [{ pattern: char, length: 1 }];
-      }
-
-      extendLayer(n, i, prevToken, baseScore, candidates, layers, ctx, beamWidth);
+      extendIndexed(
+        n,
+        i,
+        prevToken,
+        baseScore,
+        candidates,
+        layers,
+        context.emissionScore,
+        context.transitionWeight,
+        useBigram,
+        beamWidth,
+      );
     }
   }
 
-  return reconstructTokens(layers, n, text);
+  return reconstructResult(layers, n);
 }
 
-async function runBigramDecodeAsync(
+async function runIndexedDecodeAsync(
+  context: AsyncIndexedDecodeContext,
+  options?: DecodeRunOptions,
+): Promise<DecodeResult> {
+  const n = context.length;
+  if (n === 0) {
+    return { tokens: [], steps: [], score: 0, complete: true };
+  }
+
+  const beamWidth = options?.beamWidth;
+  const useBigram = options?.useBigram ?? true;
+  const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
+  layers[0]?.scores.set(null, 0);
+
+  for (let i = 0; i < n; i++) {
+    const layer = layers[i];
+    if (!layer || layer.scores.size === 0) continue;
+    if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
+
+    const candidates = resolveCandidates(
+      await context.matchCandidates(i),
+      await context.fallbackCandidate(i),
+    );
+    if (candidates.length === 0) continue;
+
+    for (const [prevToken, baseScore] of layer.scores) {
+      if (baseScore === Number.NEGATIVE_INFINITY) continue;
+
+      await extendIndexedAsync(
+        n,
+        i,
+        prevToken,
+        baseScore,
+        candidates,
+        layers,
+        context.emissionScore,
+        context.transitionWeight,
+        useBigram,
+        beamWidth,
+      );
+    }
+  }
+
+  return reconstructResult(layers, n);
+}
+
+function decodeRunOptions(options?: LatticeDecodeOptions): DecodeRunOptions {
+  if (options?.mode === "beam") {
+    assertPositiveIntegerBeamWidth(options.beamWidth);
+    return { beamWidth: options.beamWidth, useBigram: options.useBigram };
+  }
+  return { useBigram: options?.useBigram };
+}
+
+export function decodeIndexed(
+  context: IndexedDecodeContext,
+  options?: LatticeDecodeOptions,
+): DecodeResult {
+  return runIndexedDecode(context, decodeRunOptions(options));
+}
+
+export async function decodeIndexedAsync(
+  context: AsyncIndexedDecodeContext,
+  options?: LatticeDecodeOptions,
+): Promise<DecodeResult> {
+  return runIndexedDecodeAsync(context, decodeRunOptions(options));
+}
+
+function textIndexedContext(text: string, ctx: ViterbiContext): IndexedDecodeContext {
+  return {
+    length: text.length,
+    matchCandidates: (offset) => ctx.matchCandidates(text, offset),
+    fallbackCandidate: (offset) => {
+      const ch = text[offset];
+      return ch === undefined ? null : { pattern: ch, length: 1 };
+    },
+    transitionWeight: ctx.transitionWeight,
+    emissionScore: ctx.emissionScore,
+  };
+}
+
+function textIndexedContextAsync(
   text: string,
   ctx: AsyncViterbiContext,
-  options?: DecodeRunOptions,
-): Promise<string[]> {
-  const n = text.length;
-  if (n === 0) return [];
-
-  const beamWidth = options?.beamWidth;
-  const layers: Layer[] = Array.from({ length: n + 1 }, createLayer);
-  layers[0]?.scores.set(null, 0);
-
-  for (let i = 0; i < n; i++) {
-    const layer = layers[i];
-    if (!layer || layer.scores.size === 0) continue;
-    if (beamWidth !== undefined) pruneLayer(layer, beamWidth);
-
-    for (const [prevToken, baseScore] of layer.scores) {
-      if (baseScore === Number.NEGATIVE_INFINITY) continue;
-
-      let candidates = await ctx.matchCandidates(text, i);
-      if (candidates.length === 0) {
-        const char = text[i];
-        if (char === undefined) continue;
-        candidates = [{ pattern: char, length: 1 }];
-      }
-
-      await extendLayerAsync(n, i, prevToken, baseScore, candidates, layers, ctx, beamWidth);
-    }
-  }
-
-  return reconstructTokens(layers, n, text);
+): AsyncIndexedDecodeContext {
+  return {
+    length: text.length,
+    matchCandidates: (offset) => ctx.matchCandidates(text, offset),
+    fallbackCandidate: async (offset) => {
+      const ch = text[offset];
+      return ch === undefined ? null : { pattern: ch, length: 1 };
+    },
+    transitionWeight: ctx.transitionWeight,
+    emissionScore: ctx.emissionScore,
+  };
 }
 
-function assertPositiveIntegerBeamWidth(beamWidth: number): void {
-  if (!Number.isInteger(beamWidth) || beamWidth <= 0) {
-    throw new RangeError(`beamWidth must be a positive integer, got ${beamWidth}`);
-  }
+export function decodeDetailed(
+  text: string,
+  ctx: ViterbiContext,
+  options?: LatticeDecodeOptions,
+): DecodeResult {
+  return decodeIndexed(textIndexedContext(text, ctx), options);
+}
+
+export async function decodeDetailedAsync(
+  text: string,
+  ctx: AsyncViterbiContext,
+  options?: LatticeDecodeOptions,
+): Promise<DecodeResult> {
+  return decodeIndexedAsync(textIndexedContextAsync(text, ctx), options);
 }
 
 export function decode(
@@ -216,10 +403,8 @@ export function decode(
   ctx: ViterbiContext,
   options?: LatticeDecodeOptions,
 ): string[] {
-  if (options?.mode === "beam") {
-    return beamDecode(text, ctx, options.beamWidth);
-  }
-  return viterbiDecode(text, ctx);
+  const result = decodeDetailed(text, ctx, options);
+  return result.complete ? result.tokens : [];
 }
 
 export async function decodeAsync(
@@ -227,26 +412,23 @@ export async function decodeAsync(
   ctx: AsyncViterbiContext,
   options?: LatticeDecodeOptions,
 ): Promise<string[]> {
-  if (options?.mode === "beam") {
-    return beamDecodeAsync(text, ctx, options.beamWidth);
-  }
-  return viterbiDecodeAsync(text, ctx);
+  const result = await decodeDetailedAsync(text, ctx, options);
+  return result.complete ? result.tokens : [];
 }
 
 export function viterbiDecode(text: string, ctx: ViterbiContext): string[] {
-  return runBigramDecode(text, ctx);
+  return decode(text, ctx);
 }
 
 export async function viterbiDecodeAsync(
   text: string,
   ctx: AsyncViterbiContext,
 ): Promise<string[]> {
-  return runBigramDecodeAsync(text, ctx);
+  return decodeAsync(text, ctx);
 }
 
 export function beamDecode(text: string, ctx: ViterbiContext, beamWidth: number): string[] {
-  assertPositiveIntegerBeamWidth(beamWidth);
-  return runBigramDecode(text, ctx, { beamWidth });
+  return decode(text, ctx, { mode: "beam", beamWidth });
 }
 
 export async function beamDecodeAsync(
@@ -254,8 +436,7 @@ export async function beamDecodeAsync(
   ctx: AsyncViterbiContext,
   beamWidth: number,
 ): Promise<string[]> {
-  assertPositiveIntegerBeamWidth(beamWidth);
-  return runBigramDecodeAsync(text, ctx, { beamWidth });
+  return decodeAsync(text, ctx, { mode: "beam", beamWidth });
 }
 
 export type LmDecodeDeps = {

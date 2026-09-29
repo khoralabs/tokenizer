@@ -1,47 +1,66 @@
 import { AhoCorasick } from "./aho-corasick";
+import type { Atom, TerminalEntry } from "./atom";
+import { assertNonEmptyAtoms, atomsFromText } from "./atom";
 import type { ITrie, MatchCandidate } from "./trie";
 
 /** In-memory vocabulary backed by Aho-Corasick for pattern matching. */
 export class PatternVocabulary implements ITrie {
-  private patterns = new Set<string>();
+  private entries = new Map<string, Atom[]>();
   private matcher: AhoCorasick | null = null;
 
-  merge(token: string, _markov_id: number): number {
-    if (token.length === 0) throw new Error("Cannot merge empty pattern");
-    this.patterns.add(token);
+  merge(atoms: readonly Atom[], pattern: string, _markov_id: number): number {
+    assertNonEmptyAtoms(atoms);
+    if (pattern.length === 0) throw new Error("Cannot merge empty pattern");
+    this.entries.set(pattern, [...atoms]);
     this.matcher = null;
     return 0;
   }
 
   list(): string[] {
-    return [...this.patterns];
+    return [...this.entries.keys()];
   }
 
   listTerminalPatterns(): string[] {
     return this.list();
   }
 
+  listTerminalEntries(): TerminalEntry[] {
+    return [...this.entries.entries()].map(([pattern, atoms]) => ({ pattern, atoms }));
+  }
+
   invalidate(): void {
     this.matcher = null;
   }
 
-  nextCharacters(prefix: string): string[] {
-    const chars = new Set<string>();
-    for (const pattern of this.patterns) {
-      if (!pattern.startsWith(prefix)) continue;
-      const next = pattern[prefix.length];
-      if (next !== undefined) chars.add(next);
+  nextAtoms(prefix: readonly Atom[]): Atom[] {
+    const next = new Set<Atom>();
+    for (const atoms of this.entries.values()) {
+      if (atoms.length <= prefix.length) continue;
+      let ok = true;
+      for (let i = 0; i < prefix.length; i++) {
+        if (atoms[i] !== prefix[i]) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+      const child = atoms[prefix.length];
+      if (child !== undefined) next.add(child);
     }
-    return [...chars];
+    return [...next];
   }
 
-  matchCandidates(text: string, offset = 0): MatchCandidate[] {
-    return this.getMatcher().matchStarts(text)[offset] ?? [];
+  nextCharacters(prefix: string): string[] {
+    return this.nextAtoms(atomsFromText(prefix));
+  }
+
+  matchCandidates(source: readonly Atom[], offset = 0): MatchCandidate[] {
+    return this.getMatcher().matchStarts(source)[offset] ?? [];
   }
 
   private getMatcher(): AhoCorasick {
     if (!this.matcher) {
-      this.matcher = new AhoCorasick(this.patterns);
+      this.matcher = new AhoCorasick(this.listTerminalEntries());
     }
     return this.matcher;
   }

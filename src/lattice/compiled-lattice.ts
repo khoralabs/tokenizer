@@ -1,10 +1,14 @@
 import { AhoCorasick } from "./aho-corasick";
+import type { Atom, TerminalEntry } from "./atom";
+import { atomsFromText } from "./atom";
 import { bigramLogProb, DEFAULT_LM_SMOOTHING, type LmStats, unigramLogProb } from "./lm";
 import {
   createAsyncViterbiContext,
   createViterbiContext,
   decode,
   decodeAsync,
+  decodeIndexed,
+  decodeIndexedAsync,
   type LatticeDecodeOptions,
   type MatchCandidate,
 } from "./tokenize";
@@ -12,7 +16,14 @@ import {
 /** Compiled decode index: Aho-Corasick vocabulary + precomputed LM scores. */
 export interface ICompiledLattice {
   readonly patternCount: number;
+  /** Frozen terminal snapshot (pattern key + atom path used at compile). */
+  readonly terminals: readonly TerminalEntry[];
+  /** Pattern keys derived from `terminals`. */
+  readonly patterns: readonly string[];
+  /** Scan a character-atom source (UTF-16 code units). */
   scan(text: string): MatchCandidate[][];
+  /** Scan an explicit atom source (symbol / byte feeds). */
+  scanAtoms(source: readonly Atom[]): MatchCandidate[][];
   emissionLogProb(token: string): number;
   transitionLogProb(from: string | null, to: string): number;
 }
@@ -27,9 +38,22 @@ export type LmTables = {
 
 export type LmEdge = { from: string; to: string; weight: number };
 
+export type LmCompileOptions = {
+  smoothing?: number;
+};
+
+function resolveSmoothing(options?: LmCompileOptions): number {
+  const smoothing = options?.smoothing ?? DEFAULT_LM_SMOOTHING;
+  if (!Number.isFinite(smoothing) || smoothing <= 0) {
+    throw new RangeError(`smoothing must be finite and > 0, got ${smoothing}`);
+  }
+  return smoothing;
+}
+
 export function buildLmTables(
   tokenCounts: ReadonlyMap<string, number>,
   edges: readonly LmEdge[],
+  options?: LmCompileOptions,
 ): LmTables {
   let totalEmissions = 0;
   for (const count of tokenCounts.values()) totalEmissions += count;
@@ -37,7 +61,7 @@ export function buildLmTables(
   const lmStats: LmStats = {
     totalEmissions,
     vocabSize: tokenCounts.size,
-    smoothing: DEFAULT_LM_SMOOTHING,
+    smoothing: resolveSmoothing(options),
   };
 
   const emissionLogProb = new Map<string, number>();
@@ -72,12 +96,24 @@ export function buildLmTables(
   };
 }
 
-export function compilePatterns(patterns: string[], lm: LmTables): ICompiledLattice {
-  const matcher = new AhoCorasick(patterns);
+export function compilePatterns(
+  terminals: readonly TerminalEntry[],
+  lm: LmTables,
+): ICompiledLattice {
+  const entries = Object.freeze(
+    terminals.map((entry) =>
+      Object.freeze({ pattern: entry.pattern, atoms: Object.freeze([...entry.atoms]) }),
+    ),
+  );
+  const patterns = Object.freeze(entries.map((e) => e.pattern));
+  const matcher = new AhoCorasick(entries);
 
   return {
     patternCount: patterns.length,
-    scan: (text) => matcher.matchStarts(text),
+    terminals: entries,
+    patterns,
+    scan: (text) => matcher.matchStarts(atomsFromText(text)),
+    scanAtoms: (source) => matcher.matchStarts(source),
     emissionLogProb: lm.emissionLogProb,
     transitionLogProb: lm.transitionLogProb,
   };
@@ -123,4 +159,49 @@ export async function tokenizeCompiledAsync(
     transitionLogProb: (from, to) => lattice.transitionLogProb(from, to),
   });
   return decodeAsync(text, ctx, options);
+}
+
+/** Grain-agnostic decode over an atom source; incomplete paths return `[]`. */
+export function tokenizeCompiledAtoms(
+  source: readonly Atom[],
+  lattice: ICompiledLattice,
+  options?: LatticeDecodeOptions,
+): string[] {
+  const byStart = lattice.scanAtoms(source);
+  const result = decodeIndexed(
+    {
+      length: source.length,
+      matchCandidates: (offset) => byStart[offset] ?? [],
+      fallbackCandidate: (offset) => {
+        const atom = source[offset];
+        return atom === undefined ? null : { pattern: atom, length: 1 };
+      },
+      emissionScore: (token) => lattice.emissionLogProb(token),
+      transitionWeight: (from, to) => lattice.transitionLogProb(from, to),
+    },
+    options,
+  );
+  return result.complete ? result.tokens : [];
+}
+
+export async function tokenizeCompiledAtomsAsync(
+  source: readonly Atom[],
+  lattice: ICompiledLattice,
+  options?: LatticeDecodeOptions,
+): Promise<string[]> {
+  const byStart = lattice.scanAtoms(source);
+  const result = await decodeIndexedAsync(
+    {
+      length: source.length,
+      matchCandidates: async (offset) => byStart[offset] ?? [],
+      fallbackCandidate: async (offset) => {
+        const atom = source[offset];
+        return atom === undefined ? null : { pattern: atom, length: 1 };
+      },
+      emissionScore: async (token) => lattice.emissionLogProb(token),
+      transitionWeight: async (from, to) => lattice.transitionLogProb(from, to),
+    },
+    options,
+  );
+  return result.complete ? result.tokens : [];
 }

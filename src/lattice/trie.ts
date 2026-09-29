@@ -1,29 +1,39 @@
+import type { Atom, TerminalEntry } from "./atom";
+import type { MatchCandidate } from "./tokenize";
+
+export type { MatchCandidate };
+
 /**
- * Interface for a prefix trie that stores tokens character by character.
+ * Interface for a prefix trie that stores patterns as paths of opaque atoms.
  */
-export type MatchCandidate = { pattern: string; length: number };
 
 export interface ITrie {
   /**
-   * Inserts a token into the trie, creating nodes character by character.
-   * @param token - The token to insert
-   * @param markov_id - The markov node id to associate with this token
-   * @returns The terminal node's trie id
+   * Insert a pattern along an atom path (one edge per atom).
+   * @param atoms - Source atoms that compose the pattern
+   * @param pattern - Terminal pattern key (graph identity)
+   * @param markov_id - Associated markov node id
    */
-  merge(token: string, markov_id: number): number;
+  merge(atoms: readonly Atom[], pattern: string, markov_id: number): number;
 
   /**
-   * Gets immediate child characters of a prefix in the trie.
-   * @param prefix - The prefix to search for
-   * @returns Array of child characters
+   * Immediate child atoms of a prefix path.
+   */
+  nextAtoms(prefix: readonly Atom[]): Atom[];
+
+  /**
+   * @deprecated Prefer nextAtoms. Character-alphabet helper: prefix is UTF-16 code units.
    */
   nextCharacters(prefix: string): string[];
 
   /**
-   * Returns all vocabulary patterns matching at offset in text.
+   * Vocabulary patterns matching at offset in an atom source.
    */
-  matchCandidates(text: string, offset?: number): MatchCandidate[];
+  matchCandidates(source: readonly Atom[], offset?: number): MatchCandidate[];
 
   /** Terminal vocabulary patterns for lattice compilation. */
   listTerminalPatterns(): string[];
+
+  /** Terminal patterns with the atom paths used at insert time. */
+  listTerminalEntries(): TerminalEntry[];
 }

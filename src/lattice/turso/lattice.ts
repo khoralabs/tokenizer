@@ -1,6 +1,14 @@
-import { compilePatterns, type ICompiledLattice, tokenizeCompiledAsync } from "../compiled-lattice";
+import type { Atom } from "../atom";
+import {
+  compilePatterns,
+  type ICompiledLattice,
+  type LmCompileOptions,
+  tokenizeCompiledAsync,
+  tokenizeCompiledAtomsAsync,
+} from "../compiled-lattice";
 import { ingestSegmentBatchAsync } from "../ingest-segment";
 import type { IAsyncLattice } from "../lattice";
+import { DEFAULT_LM_SMOOTHING } from "../lm";
 import type { LatticeSegment } from "../segment";
 import type { LatticeDecodeOptions } from "../tokenize";
 import { WAL_CHECKPOINT_INTERVAL } from "../wal";
@@ -93,12 +101,16 @@ export class Lattice implements IAsyncLattice {
     await this.maybeCheckpoint();
   }
 
-  async compile(): Promise<ICompiledLattice> {
-    const [patterns, lm] = await Promise.all([
-      this.trie.listTerminalPatterns(),
-      this.graph.buildLmTables(),
+  async compile(options?: LmCompileOptions): Promise<ICompiledLattice> {
+    const [entries, lm] = await Promise.all([
+      this.trie.listTerminalEntries(),
+      this.graph.buildLmTables(options),
     ]);
-    return compilePatterns(patterns, lm);
+    const compiled = compilePatterns(entries, lm);
+    if ((options?.smoothing ?? DEFAULT_LM_SMOOTHING) === DEFAULT_LM_SMOOTHING) {
+      this.compiledLattice = compiled;
+    }
+    return compiled;
   }
 
   invalidateCompiled(): void {
@@ -107,6 +119,10 @@ export class Lattice implements IAsyncLattice {
 
   async tokenize(text: string, options?: LatticeDecodeOptions): Promise<string[]> {
     return tokenizeCompiledAsync(text, await this.getCompiledLattice(), options);
+  }
+
+  async tokenizeAtoms(source: readonly Atom[], options?: LatticeDecodeOptions): Promise<string[]> {
+    return tokenizeCompiledAtomsAsync(source, await this.getCompiledLattice(), options);
   }
 
   private async getCompiledLattice(): Promise<ICompiledLattice> {
@@ -133,6 +149,11 @@ export class Lattice implements IAsyncLattice {
     return this.graph.getNext(from);
   }
 
+  async nextAtoms(prefix: readonly Atom[]): Promise<Atom[]> {
+    return this.trie.nextAtoms(prefix);
+  }
+
+  /** @deprecated Prefer `nextAtoms`. */
   async nextCharacters(prefix: string): Promise<string[]> {
     return this.trie.nextCharacters(prefix);
   }

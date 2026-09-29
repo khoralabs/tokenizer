@@ -1,5 +1,4 @@
 import type { IAsyncLattice } from "../lattice/lattice";
-import type { IDictionary } from "../lz-sequencer/dictionary/dictionary";
 import type { ISequencer } from "../sequencer";
 import { createFeedState, type FeedState, feedInputStreamAsync } from "./feed";
 import type { IJob } from "./job";
@@ -7,7 +6,6 @@ import type { IJob } from "./job";
 export interface AsyncPipelineMount {
   lattice: IAsyncLattice;
   sequencer: ISequencer;
-  dictionary: IDictionary;
 }
 
 export interface AsyncPipelineOptions {
@@ -19,7 +17,6 @@ type QueuedJob = { job: IJob; resolve: () => void; reject: (error: unknown) => v
 export class AsyncPipeline {
   readonly lattice: IAsyncLattice;
   readonly sequencer: ISequencer;
-  readonly dictionary: IDictionary;
 
   private batchSize: number;
   private feedState: FeedState;
@@ -31,7 +28,6 @@ export class AsyncPipeline {
   constructor(mount: AsyncPipelineMount, options: AsyncPipelineOptions = {}) {
     this.lattice = mount.lattice;
     this.sequencer = mount.sequencer;
-    this.dictionary = mount.dictionary;
     this.batchSize = options.transitionBatchSize ?? 1000;
     this.feedState = createFeedState();
   }

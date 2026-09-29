@@ -9,6 +9,19 @@ describe("memory lattice", () => {
     await expectLatticeBasics(() => new MemoryLattice());
   });
 
+  test("nextAtoms follows opaque symbol edges", () => {
+    const lattice = new MemoryLattice();
+    lattice.ingestBatch([
+      { key: "foo|bar|", sequence: ["foo|", "bar|"] },
+      { key: "foo|", sequence: ["foo|"] },
+    ]);
+    expect(lattice.nextAtoms([]).sort()).toEqual(["bar|", "foo|"]);
+    expect(lattice.nextAtoms(["foo|"])).toEqual(["bar|"]);
+    // UTF-16 helper does not walk opaque symbol edges
+    expect(lattice.nextCharacters("foo|")).toEqual([]);
+    lattice.close();
+  });
+
   test("mergeBatch accumulates edge weight", () => {
     const lattice = new MemoryLattice();
     lattice.merge([
