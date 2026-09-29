@@ -31,5 +31,5 @@ Documentation for `@khoralabs/tkn` follows the [Diátaxis](https://diataxis.fr) 
 
 ## Reference
 
-- [API](reference/api.md) — atoms, feeds, delimiters, indexed decode, compile options
+- [API](reference/api.md) — atoms, feeds, `tokenizeAtoms`, delimiters, indexed decode, compile options
 - [CLI](reference/cli.md)

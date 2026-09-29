@@ -52,10 +52,19 @@ import { Lattice } from "@khoralabs/tkn/bun-sqlite";
 
 const tokenizer = createLatticeTokenizer(new Lattice());
 
-await tokenizer.feed(corpus);
+await tokenizer.feed(corpus); // character grain
 tokenizer.tokenize("hello");
 tokenizer.vocabulary();
 tokenizer.getTopTokens(10);
+```
+
+For opaque symbols (or bytes), use `feedSource` / `tokenizeAtoms`:
+
+```typescript
+import { feedSymbols } from "@khoralabs/tkn";
+
+await tokenizer.feedSource(feedSymbols(["svc:api", "lvl:err", "<0>"]));
+tokenizer.tokenizeAtoms(["svc:api", "lvl:err", "<0>"]);
 ```
 
 Options:

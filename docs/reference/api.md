@@ -116,14 +116,16 @@ Returns:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `feed(text)` | `Promise<void>` | Character-atom feed into lattice via `feedCharacters` |
-| `tokenize(text, options?)` | `string[]` | Decode text |
+| `feed(text)` | `Promise<void>` | Character-grain feed via `feedCharacters` |
+| `feedSource(source)` | `Promise<void>` | Online feed of opaque atoms (any grain) |
+| `tokenize(text, options?)` | `string[]` | Character-grain decode |
+| `tokenizeAtoms(source, options?)` | `string[]` | Grain-agnostic decode; incomplete → `[]` |
 | `vocabulary()` | `string[]` | All pattern strings |
 | `getTopTokens(limit?)` | `{ pattern, confidence }[]` | Top patterns by hub score |
 
 ## `createAsyncLatticeTokenizer(lattice, options?)`
 
-Same as sync helper, but `tokenize`, `vocabulary`, and `getTopTokens` return promises. `feed` uses `feedCharacters`.
+Same as sync helper; async methods return promises. `feed` is character-grain; use `feedSource` for other alphabets.
 
 ## `ILattice`
 
@@ -131,16 +133,18 @@ Same as sync helper, but `tokenize`, `vocabulary`, and `getTopTokens` return pro
 |--------|-------------|
 | `merge(pairs)` | Record transitions `[from, to, weight?][]` |
 | `getNext(from)` | Outgoing transitions with weights |
-| `nextCharacters(prefix)` | Trie child atoms for a character-atom prefix string |
+| `nextAtoms(prefix)` | Immediate child atoms of a trie prefix path |
+| `nextCharacters(prefix)` | **Deprecated.** UTF-16 helper over `nextAtoms` |
 | `getTopTokens(limit?)` | Top patterns by hub score |
 | `ingest(segment)` | Store one segment (trie edges follow `sequence` atoms) |
 | `ingestBatch(segments)` | Store many segments |
 | `commitFeedBatch(segments, pairs)` | Ingest and merge in one transaction |
-| `tokenize(text, options?)` | Decode text; compiles lazily |
+| `tokenize(text, options?)` | Character-grain decode; compiles lazily |
+| `tokenizeAtoms(source, options?)` | Grain-agnostic decode; incomplete → `[]` |
 | `compile(options?)` | Build `ICompiledLattice`; optional `{ smoothing }` |
 | `invalidateCompiled()` | Drop cached compile |
 | `vocabulary()` | Graph pattern strings |
-| `pipe(source, batchSize?)` | Ingest from async generator |
+| `pipe(source, batchSize?)` | Ingest `LatticeSegment` stream |
 | `close()` | Close storage |
 
 `compile({ smoothing })` with non-default smoothing returns an uncached snapshot. Default smoothing fills the decode cache.
@@ -183,12 +187,12 @@ type AsyncIndexedDecodeContext = { /* async callbacks; length sync */ };
 | `decodeIndexedAsync(context, options?)` | Async equivalent |
 | `decodeDetailed(text, ctx, options?)` | Text adapter over `decodeIndexed` |
 | `decodeDetailedAsync(text, ctx, options?)` | Async text adapter |
-| `decode(text, ctx, options?)` | `decodeDetailed(...).tokens` (incomplete → char-split fallback) |
+| `decode(text, ctx, options?)` | `decodeDetailed(...).tokens` when complete; otherwise `[]` |
 | `decodeAsync(text, ctx, options?)` | Async `decode` |
 | `viterbiDecode` / `beamDecode` | Thin wrappers over `decode` |
 | `viterbiDecodeAsync` / `beamDecodeAsync` | Async wrappers |
 
-Incomplete indexed paths return `{ complete: false, score: -Infinity, tokens: [], steps: [] }`. Invalid candidate lengths and non-positive/non-integer `beamWidth` throw `RangeError`.
+Incomplete indexed paths return `{ complete: false, score: -Infinity, tokens: [], steps: [] }`. `decode` / `tokenizeCompiled` / `tokenizeAtoms` return `[]` when incomplete (no character-split fallback). Invalid candidate lengths and non-positive/non-integer `beamWidth` throw `RangeError`.
 
 When `useBigram` is `false`, transition contribution is zero.
 
@@ -199,12 +203,16 @@ When `useBigram` is `false`, transition contribution is zero.
 | `buildLmTables(tokenCounts, edges, options?)` | Build LM score functions; `options.smoothing` must be finite and `> 0` |
 | `terminalEntriesFromText(patterns)` | Char-grain helper: UTF-16 atoms per pattern key |
 | `compilePatterns(terminals, lm)` | Build `ICompiledLattice` from `TerminalEntry[]` only |
-| `tokenizeCompiled(text, compiled, options?)` | Sync decode on compiled index |
-| `tokenizeCompiledAsync(text, compiled, options?)` | Async decode on compiled index |
-| `AhoCorasick` | Atom-edge pattern automaton |
+| `tokenizeCompiled(text, compiled, options?)` | Character-grain decode on compiled index |
+| `tokenizeCompiledAsync(text, compiled, options?)` | Async character-grain decode |
+| `tokenizeCompiledAtoms(source, compiled, options?)` | Grain-agnostic decode; incomplete → `[]` |
+| `tokenizeCompiledAtomsAsync(source, compiled, options?)` | Async grain-agnostic decode |
+| `AhoCorasick` | Atom-edge pattern automaton (advanced; takes `TerminalEntry[]`) |
 | `PatternVocabulary` | In-memory pattern store (`merge(atoms, pattern, markovId)`) |
 
 ## Pipeline
+
+Mount: `{ lattice, sequencer }`. The LZ dictionary lives inside the sequencer gate (`createLZSequencer` / `LZGate`), not on the pipeline.
 
 | Export | Description |
 |--------|-------------|

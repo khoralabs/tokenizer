@@ -68,6 +68,13 @@ console.log(result.steps); // start/end atom offsets + score contributions
 
 **Outcome:** `result.tokens` is the decoded pattern sequence; `result.steps` carry source-unit spans and cumulative scores.
 
+When the lattice was trained on the same alphabet, prefer the lattice helper:
+
+```typescript
+lattice.tokenizeAtoms(symbols);
+// or: tokenizeCompiledAtoms(symbols, compiled)
+```
+
 ## Options
 
 ```typescript

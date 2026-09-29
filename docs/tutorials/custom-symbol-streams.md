@@ -110,31 +110,15 @@ The LZ gate emits segments when an extended prefix is not in the dictionary. Ing
 
 ## Step 5 — Decode over symbols
 
-`tokenize(text)` is for UTF-16 text. For discrete atoms, compile and call `decodeIndexed`:
+`tokenize(text)` is the character-grain adapter. For discrete atoms use `tokenizeAtoms` (or low-level `decodeIndexed`):
 
 ```typescript
-import { decodeIndexed } from "@khoralabs/tkn";
-
 const symbols = ["svc:api", "lvl:err", "op:read", "<0>"];
-const compiled = lattice.compile();
-const byStart = compiled.scanAtoms(symbols);
-
-const result = decodeIndexed({
-  length: symbols.length,
-  matchCandidates: (offset) => byStart[offset] ?? [],
-  fallbackCandidate: (offset) => {
-    const s = symbols[offset];
-    return s === undefined ? null : { pattern: s, length: 1 };
-  },
-  emissionScore: (t) => compiled.emissionLogProb(t),
-  transitionWeight: (from, to) => compiled.transitionLogProb(from, to),
-});
-
-console.log(result.tokens, result.steps);
+console.log(lattice.tokenizeAtoms(symbols));
 lattice.close();
 ```
 
-See [Decode a symbol stream](../how-to/decode-symbol-stream.md).
+See [Decode a symbol stream](../how-to/decode-symbol-stream.md) for spans/scores via `decodeIndexed`.
 
 ## Next steps
 

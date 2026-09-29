@@ -64,7 +64,7 @@ Default LM smoothing is cached. Non-default `LmCompileOptions.smoothing` returns
 
 ### Decoder
 
-`tokenize()` / `decode()` adapt UTF-16 text onto indexed decode. `decodeIndexed` / `decodeIndexedAsync` take host-supplied length, candidates, fallback, and scores — used for discrete symbol streams. Default mode is Viterbi. `decodeDetailed` returns spans and cumulative scores.
+`tokenizeAtoms` / `tokenizeCompiledAtoms` decode over an explicit atom source. `tokenize` / `decode` / `scan` are character-grain adapters onto the same indexed core. `decodeIndexed` remains available for custom candidate logic. Default mode is Viterbi. Incomplete coverage returns `[]` from tokenize helpers (`complete: false` from detailed/indexed APIs).
 
 ## Backend storage
 

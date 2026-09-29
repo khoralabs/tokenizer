@@ -1,6 +1,6 @@
 # @khoralabs/tkn _(tkn)_
 
-Online pattern discovery and lattice-backed decoding for sequential text and discrete symbol streams.
+Online pattern discovery and lattice-backed decoding over character, byte, or opaque symbol streams.
 
 ## Table of Contents
 
