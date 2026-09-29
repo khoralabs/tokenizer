@@ -1,3 +1,4 @@
+import type { Atom } from "../atom";
 import {
   compilePatterns,
   type ICompiledLattice,
@@ -76,6 +77,11 @@ export class Lattice implements ILattice {
     return this.graph.getNext(from);
   }
 
+  nextAtoms(prefix: readonly Atom[]): Atom[] {
+    return this.patterns.nextAtoms(prefix);
+  }
+
+  /** @deprecated Prefer `nextAtoms`. */
   nextCharacters(prefix: string): string[] {
     return this.patterns.nextCharacters(prefix);
   }

@@ -1,3 +1,4 @@
+import type { Atom } from "../atom";
 import {
   compilePatterns,
   type ICompiledLattice,
@@ -143,6 +144,11 @@ export class Lattice implements IAsyncLattice {
     return this.graph.getNext(from);
   }
 
+  async nextAtoms(prefix: readonly Atom[]): Promise<Atom[]> {
+    return this.trie.nextAtoms(prefix);
+  }
+
+  /** @deprecated Prefer `nextAtoms`. */
   async nextCharacters(prefix: string): Promise<string[]> {
     return this.trie.nextCharacters(prefix);
   }

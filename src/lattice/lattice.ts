@@ -1,3 +1,4 @@
+import type { Atom } from "./atom";
 import type { ICompiledLattice, LmCompileOptions } from "./compiled-lattice";
 import type { LatticeSegment } from "./segment";
 import type { LatticeDecodeOptions } from "./tokenize";
@@ -20,9 +21,12 @@ export interface ILattice {
   getNext(from: string): { to: string; weight: number }[];
 
   /**
-   * Gets immediate child characters of a prefix in the trie.
-   * @param prefix - The prefix to search for
-   * @returns Array of child characters
+   * Immediate child atoms of a trie prefix path.
+   */
+  nextAtoms(prefix: readonly Atom[]): Atom[];
+
+  /**
+   * @deprecated Prefer `nextAtoms`. Character-alphabet helper: prefix is UTF-16 code units.
    */
   nextCharacters(prefix: string): string[];
 
@@ -66,22 +70,19 @@ export interface ILattice {
   vocabulary(): string[];
 
   /**
-   * Pipes sequences from an async generator into the lattice.
-   * - Trie: Stores individual sequence elements (characters + sentinels) linked to graph nodes
-   * - Graph: Builds transitions between consecutive pattern keys
+   * Pipes segments from an async generator into the lattice.
+   * - Trie: one edge per `sequence` atom (including sentinel-shaped atoms)
+   * - Graph: transitions between consecutive pattern keys
    *
-   * Example: sequence ["t", "h", "e", "<0>"] with key "the<0>" creates:
-   * - Graph node for pattern "the<0>"
-   * - Trie nodes for "t", "h", "e", and "<0>" (sentinel stored as-is)
-   * - Graph transitions between consecutive patterns
+   * Example: sequence `["svc:api", "lvl:err"]` with key `"svc:api|lvl:err"` creates:
+   * - Graph node for the pattern key
+   * - Trie path with edges `svc:api` → `lvl:err`
+   * - Graph transitions between consecutive segment keys
    *
-   * @param source - AsyncGenerator that yields sequences with keys (e.g., from ISequencer.read())
+   * @param source - AsyncGenerator of `LatticeSegment` (e.g. from sequencer output)
    * @param batchSize - Number of pairs to batch before merging (default 1000)
    */
-  pipe(
-    source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
-    batchSize?: number,
-  ): Promise<void>;
+  pipe(source: AsyncGenerator<LatticeSegment, void, unknown>, batchSize?: number): Promise<void>;
 
   /**
    * Closes the underlying storage/database connection.
@@ -95,6 +96,8 @@ export interface ILattice {
 export interface IAsyncLattice {
   merge(pairs: [string, string, number?][]): Promise<void>;
   getNext(from: string): Promise<{ to: string; weight: number }[]>;
+  nextAtoms(prefix: readonly Atom[]): Promise<Atom[]>;
+  /** @deprecated Prefer `nextAtoms`. Character-alphabet helper: prefix is UTF-16 code units. */
   nextCharacters(prefix: string): Promise<string[]>;
   getTopTokens(limit?: number): Promise<{ pattern: string; confidence: number }[]>;
   ingest(segment: LatticeSegment): Promise<void>;
@@ -104,9 +107,6 @@ export interface IAsyncLattice {
   compile(options?: LmCompileOptions): Promise<ICompiledLattice>;
   invalidateCompiled(): void;
   vocabulary(): Promise<string[]>;
-  pipe(
-    source: AsyncGenerator<{ key: string; sequence: string[] }, void, unknown>,
-    batchSize?: number,
-  ): Promise<void>;
+  pipe(source: AsyncGenerator<LatticeSegment, void, unknown>, batchSize?: number): Promise<void>;
   close(): Promise<void>;
 }

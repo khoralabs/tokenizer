@@ -6,6 +6,7 @@ export interface LatticeLike {
   getNext(
     from: string,
   ): { to: string; weight: number }[] | Promise<{ to: string; weight: number }[]>;
+  nextAtoms?(prefix: readonly string[]): string[] | Promise<string[]>;
   nextCharacters(prefix: string): string[] | Promise<string[]>;
   getTopTokens(
     limit?: number,
