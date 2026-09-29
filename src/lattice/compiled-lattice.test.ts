@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { terminalEntriesFromText } from "./atom";
 import { buildLmTables, compilePatterns, tokenizeCompiled } from "./compiled-lattice";
 import { Lattice } from "./sqlite/lattice";
 import { createViterbiContext, decode } from "./tokenize";
@@ -77,7 +78,9 @@ describe("compiled lattice", () => {
       { from: "ab", to: "c", weight: 20 },
     ];
     const lm = buildLmTables(tokenCounts, edges);
-    const lattice = compilePatterns(["a", "b", "ab", "c"], lm);
+    const lattice = compilePatterns(terminalEntriesFromText(["a", "b", "ab", "c"]), lm);
+    expect(lattice.terminals.map((t) => t.pattern)).toEqual(["a", "b", "ab", "c"]);
+    expect(lattice.terminals.find((t) => t.pattern === "ab")?.atoms).toEqual(["a", "b"]);
 
     const weight = new Map([
       ["a\0b", 1],

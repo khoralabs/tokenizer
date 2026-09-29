@@ -155,7 +155,8 @@ Same method set as `ILattice`. Storage methods return `Promise`.
 | Member | Description |
 |--------|-------------|
 | `patternCount` | Number of compiled patterns |
-| `patterns` | Frozen list of trie-terminal pattern keys |
+| `terminals` | Frozen `TerminalEntry[]` (pattern + atom path) |
+| `patterns` | Pattern keys derived from `terminals` |
 | `scan(text)` | Match candidates per UTF-16 offset |
 | `scanAtoms(source)` | Match candidates per atom offset |
 | `emissionLogProb(token)` | Unigram log-score |
@@ -197,7 +198,8 @@ When `useBigram` is `false`, transition contribution is zero.
 | Export | Description |
 |--------|-------------|
 | `buildLmTables(tokenCounts, edges, options?)` | Build LM score functions; `options.smoothing` must be finite and `> 0` |
-| `compilePatterns(patterns, lm)` | Build `ICompiledLattice` from `string[]` or `TerminalEntry[]` |
+| `terminalEntriesFromText(patterns)` | Char-grain helper: UTF-16 atoms per pattern key |
+| `compilePatterns(terminals, lm)` | Build `ICompiledLattice` from `TerminalEntry[]` only |
 | `tokenizeCompiled(text, compiled, options?)` | Sync decode on compiled index |
 | `tokenizeCompiledAsync(text, compiled, options?)` | Async decode on compiled index |
 | `AhoCorasick` | Atom-edge pattern automaton |

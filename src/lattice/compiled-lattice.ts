@@ -14,6 +14,9 @@ import {
 /** Compiled decode index: Aho-Corasick vocabulary + precomputed LM scores. */
 export interface ICompiledLattice {
   readonly patternCount: number;
+  /** Frozen terminal snapshot (pattern key + atom path used at compile). */
+  readonly terminals: readonly TerminalEntry[];
+  /** Pattern keys derived from `terminals`. */
   readonly patterns: readonly string[];
   /** Scan a character-atom source (UTF-16 code units). */
   scan(text: string): MatchCandidate[][];
@@ -92,18 +95,21 @@ export function buildLmTables(
 }
 
 export function compilePatterns(
-  patterns: readonly TerminalEntry[] | readonly string[],
+  terminals: readonly TerminalEntry[],
   lm: LmTables,
 ): ICompiledLattice {
-  const entries: TerminalEntry[] = [...patterns].map((entry) =>
-    typeof entry === "string" ? { pattern: entry, atoms: atomsFromText(entry) } : entry,
+  const entries = Object.freeze(
+    terminals.map((entry) =>
+      Object.freeze({ pattern: entry.pattern, atoms: Object.freeze([...entry.atoms]) }),
+    ),
   );
-  const snapshot = Object.freeze(entries.map((e) => e.pattern));
+  const patterns = Object.freeze(entries.map((e) => e.pattern));
   const matcher = new AhoCorasick(entries);
 
   return {
-    patternCount: snapshot.length,
-    patterns: snapshot,
+    patternCount: patterns.length,
+    terminals: entries,
+    patterns,
     scan: (text) => matcher.matchStarts(atomsFromText(text)),
     scanAtoms: (source) => matcher.matchStarts(source),
     emissionLogProb: lm.emissionLogProb,

@@ -14,15 +14,11 @@ type Node = {
 export class AhoCorasick {
   private nodes: Node[] = [];
 
-  constructor(entries: Iterable<TerminalEntry | string>) {
+  constructor(entries: Iterable<TerminalEntry>) {
     this.nodes.push({ next: new Map(), fail: 0, output: [] });
     for (const entry of entries) {
-      const normalized =
-        typeof entry === "string"
-          ? { pattern: entry, atoms: Array.from(entry) }
-          : { pattern: entry.pattern, atoms: entry.atoms };
-      if (normalized.atoms.length === 0 || normalized.pattern.length === 0) continue;
-      this.insert(normalized.pattern, normalized.atoms);
+      if (entry.atoms.length === 0 || entry.pattern.length === 0) continue;
+      this.insert(entry.pattern, entry.atoms);
     }
     this.buildFailures();
   }

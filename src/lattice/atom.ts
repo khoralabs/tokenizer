@@ -11,6 +11,11 @@ export function atomsFromText(text: string): Atom[] {
   return Array.from(text);
 }
 
+/** Char-grain helper: each pattern key is split into UTF-16 atoms for compile/AC. */
+export function terminalEntriesFromText(patterns: readonly string[]): TerminalEntry[] {
+  return patterns.map((pattern) => ({ pattern, atoms: atomsFromText(pattern) }));
+}
+
 export function assertNonEmptyAtoms(atoms: readonly Atom[], label = "atoms"): void {
   if (atoms.length === 0) throw new Error(`Cannot merge empty ${label}`);
   for (const atom of atoms) {

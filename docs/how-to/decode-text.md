@@ -101,7 +101,12 @@ lattice.tokenize("new text");
 Build LM tables and a compiled index from pattern lists and edge weights.
 
 ```typescript
-import { buildLmTables, compilePatterns, tokenizeCompiled } from "@khoralabs/tkn";
+import {
+  buildLmTables,
+  compilePatterns,
+  terminalEntriesFromText,
+  tokenizeCompiled,
+} from "@khoralabs/tkn";
 
 const tokenCounts = new Map([
   ["he", 10],
@@ -110,7 +115,7 @@ const tokenCounts = new Map([
 const edges = [{ from: "he", to: "llo", weight: 5 }];
 
 const lm = buildLmTables(tokenCounts, edges, { smoothing: 0.1 });
-const compiled = compilePatterns(["he", "llo"], lm);
+const compiled = compilePatterns(terminalEntriesFromText(["he", "llo"]), lm);
 const tokens = tokenizeCompiled("hello", compiled);
 ```
 
@@ -119,7 +124,8 @@ const tokens = tokenizeCompiled("hello", compiled);
 ```typescript
 const compiled = lattice.compile();
 compiled.patternCount;
-compiled.patterns; // trie terminals
+compiled.terminals; // pattern + atom path
+compiled.patterns; // pattern keys
 compiled.scan("hello");
 compiled.scanAtoms(["h", "e", "l", "l", "o"]);
 compiled.emissionLogProb("he");
