@@ -69,6 +69,8 @@ Each emitted segment becomes a `LatticeSegment`:
 
 `commitFeedBatch` performs ingest and merge in one storage transaction.
 
+Online feeds accumulate emitted segments in `FeedState` and commit when segment or transition batch thresholds are reached, at stream end, or via `flushFeedState` / `flushFeedStateAsync`. Until commit, `getNext` and `vocabulary` may not see the latest emissions. Feed flush does not call `ISequencer.flush()` and leaves the unfinished LZ candidate open.
+
 ## Language model
 
 Decode scores use:

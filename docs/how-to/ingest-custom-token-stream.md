@@ -81,6 +81,25 @@ Use `feedInputStreamAsync` with `AsyncPipeline` and an async lattice backend.
 
 Also available: `feedCharacters(text)`, `feedBytes(uint8Array)`.
 
+## Per-symbol online ingest
+
+For symbol-at-a-time loops (for example before compile/decode/forecast), use `feedInput` and an explicit `flushFeedState`:
+
+```typescript
+import { createFeedState, feedInput, flushFeedState } from "@khoralabs/tkn";
+
+const state = createFeedState();
+const batchSize = 1000;
+
+feedInput(lattice, sequencer, "a", state, batchSize);
+feedInput(lattice, sequencer, "b", state, batchSize);
+flushFeedState(lattice, state, batchSize);
+
+console.log(lattice.getNext("a")); // reflects committed transitions
+```
+
+`flushFeedState` commits pending segments and edges only. It does not call `sequencer.flush()`, so the unfinished LZ candidate stays open. Prefer this over `endSequence()` when you need lattice visibility mid-sequence.
+
 ## Related
 
 - [Decode a symbol stream](decode-symbol-stream.md)

@@ -219,11 +219,36 @@ Mount: `{ lattice, sequencer }`. The LZ dictionary lives inside the sequencer ga
 | `Pipeline` | Sync sequencer-to-lattice ingest |
 | `AsyncPipeline` | Async sequencer-to-lattice ingest |
 | `GlobFileJob` | File glob ingest job (character stream) |
+| `createFeedState` | Create empty `FeedState` for incremental or stream ingest |
+| `feedInput` | Push one atom; accumulate emitted segments into `FeedState` (sync lattice) |
+| `feedInputAsync` | Push one atom; accumulate emitted segments into `FeedState` (async lattice) |
+| `flushFeedState` | Commit pending segments/transitions without calling `ISequencer.flush` |
+| `flushFeedStateAsync` | Async variant of `flushFeedState` |
 | `feedInputStream` | Feed sync lattice from `AsyncGenerator<SequencerInput>` |
 | `feedInputStreamAsync` | Feed async lattice from `AsyncGenerator<SequencerInput>` |
 | `feedCharacters` / `feedBytes` / `feedSymbols` | Atom feed generators |
 
 `IJob.input()` accepts any `AsyncGenerator<SequencerInput>`. Each yield is one atom.
+
+### Incremental ingest
+
+Emitted LZ segments can sit in `FeedState` until `pendingSegments.length >= 500`, unique transitions reach `transitionBatchSize`, stream end, or an explicit `flushFeedState` / `flushFeedStateAsync`. Until then, `getNext`, `vocabulary`, and `compile` may not reflect the latest emissions.
+
+```typescript
+import { createFeedState, createLZSequencer, feedInput, flushFeedState } from "@khoralabs/tkn";
+import { Lattice } from "@khoralabs/tkn/memory";
+
+const lattice = new Lattice();
+const sequencer = createLZSequencer({ historyOptions: { bounded: false } });
+const state = createFeedState();
+const batchSize = 1000;
+
+feedInput(lattice, sequencer, "a", state, batchSize);
+feedInput(lattice, sequencer, "b", state, batchSize);
+flushFeedState(lattice, state, batchSize); // commits pending lattice writes only
+```
+
+`flushFeedState` is **not** `ISequencer.flush()` / `endSequence()`. Sequencer flush emits the unfinished candidate tip; feed flush only commits segments already emitted into `FeedState`. Online forecast loops that need current graph edges should call `flushFeedState` after `feedInput` and must not call `sequencer.flush()` mid-sequence.
 
 ## LZ sequencer
 

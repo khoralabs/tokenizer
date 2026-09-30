@@ -1,6 +1,15 @@
 export type { AsyncPipelineMount, AsyncPipelineOptions } from "./async-pipeline";
 export { AsyncPipeline } from "./async-pipeline";
-export { createFeedState, type FeedState, feedInputStream, feedInputStreamAsync } from "./feed";
+export {
+  createFeedState,
+  type FeedState,
+  feedInput,
+  feedInputAsync,
+  feedInputStream,
+  feedInputStreamAsync,
+  flushFeedState,
+  flushFeedStateAsync,
+} from "./feed";
 export { feedBytes, feedCharacters, feedSymbols } from "./feeds";
 export type { IJob } from "./job";
 export { GlobFileJob, type GlobFileJobOptions } from "./jobs/glob-file-job";

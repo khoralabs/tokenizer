@@ -53,7 +53,12 @@ function shouldFlush(
   return pendingCount >= INGEST_BATCH_SIZE || transitionCount >= transitionBatchSize;
 }
 
-function flushFeedBatch(lattice: ILattice, state: FeedState, transitionBatchSize: number): void {
+/** Commit pending segments and transitions without ending the sequencer sequence. */
+export function flushFeedState(
+  lattice: ILattice,
+  state: FeedState,
+  transitionBatchSize: number,
+): void {
   const pairs = countsToPairs(state.transitionCounts);
   state.transitionCounts.clear();
 
@@ -70,7 +75,8 @@ function flushFeedBatch(lattice: ILattice, state: FeedState, transitionBatchSize
   lattice.commitFeedBatch(state.pendingSegments.splice(0), pairs);
 }
 
-async function flushFeedBatchAsync(
+/** Async variant of {@link flushFeedState}. */
+export async function flushFeedStateAsync(
   lattice: IAsyncLattice,
   state: FeedState,
   transitionBatchSize: number,
@@ -110,7 +116,7 @@ function processOutputs(
     if (
       shouldFlush(state.pendingSegments.length, state.transitionCounts.size, transitionBatchSize)
     ) {
-      flushFeedBatch(lattice, state, transitionBatchSize);
+      flushFeedState(lattice, state, transitionBatchSize);
     }
   }
 }
@@ -134,9 +140,37 @@ async function processOutputsAsync(
     if (
       shouldFlush(state.pendingSegments.length, state.transitionCounts.size, transitionBatchSize)
     ) {
-      await flushFeedBatchAsync(lattice, state, transitionBatchSize);
+      await flushFeedStateAsync(lattice, state, transitionBatchSize);
     }
   }
+}
+
+/**
+ * Push one atom through the sequencer and accumulate any emitted segments into feed state.
+ * Does not call {@link ISequencer.flush}; unfinished candidates stay open.
+ * Automatic batch thresholds still apply.
+ */
+export function feedInput(
+  lattice: ILattice,
+  sequencer: ISequencer,
+  input: SequencerInput,
+  state: FeedState,
+  batchSize: number,
+): void {
+  sequencer.push(input);
+  processOutputs(lattice, sequencer.drainPending(), state, batchSize);
+}
+
+/** Async variant of {@link feedInput}. */
+export async function feedInputAsync(
+  lattice: IAsyncLattice,
+  sequencer: ISequencer,
+  input: SequencerInput,
+  state: FeedState,
+  batchSize: number,
+): Promise<void> {
+  sequencer.push(input);
+  await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
 }
 
 export async function feedInputStream(
@@ -147,12 +181,11 @@ export async function feedInputStream(
   batchSize: number,
 ): Promise<void> {
   for await (const input of source) {
-    sequencer.push(input);
-    processOutputs(lattice, sequencer.drainPending(), state, batchSize);
+    feedInput(lattice, sequencer, input, state, batchSize);
   }
   await sequencer.endSequence();
   processOutputs(lattice, sequencer.drainPending(), state, batchSize);
-  flushFeedBatch(lattice, state, batchSize);
+  flushFeedState(lattice, state, batchSize);
 }
 
 export async function feedInputStreamAsync(
@@ -163,10 +196,9 @@ export async function feedInputStreamAsync(
   batchSize: number,
 ): Promise<void> {
   for await (const input of source) {
-    sequencer.push(input);
-    await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
+    await feedInputAsync(lattice, sequencer, input, state, batchSize);
   }
   await sequencer.endSequence();
   await processOutputsAsync(lattice, sequencer.drainPending(), state, batchSize);
-  await flushFeedBatchAsync(lattice, state, batchSize);
+  await flushFeedStateAsync(lattice, state, batchSize);
 }
